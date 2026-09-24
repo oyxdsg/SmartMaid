@@ -13,7 +13,7 @@
 - **上游许可**：代码部分 MIT，Copyright (c) 2019-2025 tartaric_acid
   （原文见上游仓库 `LICENSE-MIT`）
 - **改编文件**：
-  - `SmartMaid/src/main/java/com/tartaricacid/smartmaid/entity/ai/MaidMoveControl.java`
+  - `SmartMaid/src/main/java/com/oyxdsg/smartmaid/entity/ai/MaidMoveControl.java`
     （改编自上游 `MaidMoveControl`：移动控制逻辑重构为执行器模式，
     并加入直线导航降级；约 31 行与上游相同）
 - **适用许可**：MIT（与上游一致）。依 MIT 条款保留上述版权与许可声明。
@@ -39,7 +39,6 @@
 
 - **涉及文件**：
   - `SmartMaid/src/main/resources/assets/smartmaid/textures/entity/smart_maid.png`
-  - `assets/smartmaid/textures/entity/smart_maid.png`（仓库根 assets 下同名文件）
   - `皮肤大肥鱼.png`（仓库根）
 - **来源**：由仓库自带脚本 `SmartMaid/tools/gen_maid_skin.py` 从桌宠项目
   "大肥鱼" 角色立绘像素映射生成。该角色形象源自 B 站 UP 主 **zipzippipe**

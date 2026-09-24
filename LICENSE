@@ -19,21 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
---------------------------------------------------------------------------
-
-第三方组件 / Third-party components（详见 NOTICE 文件，另见 see NOTICE for details）:
-
-  1. 本仓库中的部分 Java 源码改编自 TouhouLittleMaid（MIT），
-     其版权与许可声明见 NOTICE。
-     Some Java source files are adapted from TouhouLittleMaid (MIT),
-     see NOTICE for attribution.
-
-  2. `SmartMaid/src/main/resources/assets/smartmaid/emotes/` 目录下的表情
-     动画 JSON 文件来自 Emotecraft（GPL-3.0），随本仓库按 GPL-3.0 分发。
-     Emote animation JSON files are taken from Emotecraft (GPL-3.0) and are
-     distributed under GPL-3.0.
-
-  3. 女仆皮肤及角色形象图片（smart_maid.png / 皮肤大肥鱼.png）基于
-     "大肥鱼" 角色立绘制作，按 CC BY-NC-SA 4.0 分发，禁止商用。
-     Maid skin / character artwork images are licensed under CC BY-NC-SA 4.0.
