@@ -1,0 +1,70 @@
+[
+  {"id":"s00","cmd":"status","expect":{"ok":true}},
+
+  {"id":"q01","cmd":"inventory","params":{"item":"#axe"},"expect":{"ok":true}},
+  {"id":"q02","cmd":"inventory","params":{},"expect":{"ok":true}},
+  {"id":"q03","cmd":"distance","params":{"pos":[0,0,0]},"expect":{"ok":true}},
+  {"id":"q04","cmd":"find","params":{"structure":"tree","range":12,"max_range":32,"expand":4},
+   "expect":{"ok":true}},
+
+  {"id":"sc1","cmd":"script",
+   "params":{
+     "name":"演示-条件提前终止",
+     "vars":{},
+     "steps":[
+       {"cmd":"inventory","params":{"item":"#axe"},"as":"axe"},
+       {"if":{"var":"axe.has","op":"eq","val":true},
+        "then":[{"terminate":{"reason":"有斧头，演示完成"}}],
+        "else":[{"terminate":{"reason":"没斧头，演示完成"}}]}
+     ]
+   },
+   "expect":{"ok":true}},
+
+  {"id":"sc2","cmd":"script",
+   "params":{
+     "name":"演示-变量算术与终止回执",
+     "vars":{"target_count":6},
+     "steps":[
+       {"cmd":"inventory","params":{"item":"#axe"},"as":"axe"},
+       {"assign":"collected","expr":"$target_count - 2"},
+       {"terminate":{"reason":"变量算术演示",
+                     "result":{"collected":"$collected","has_axe":"$axe.has"}}}
+     ]
+   },
+   "expect":{"ok":true}},
+
+  {"id":"sc3","cmd":"script",
+   "params":{
+     "name":"演示-find未命中终止",
+     "vars":{},
+     "steps":[
+       {"cmd":"find","params":{"structure":"tree","produce":"#minecraft:oak_logs",
+                               "range":12,"max_range":32,"expand":4},"as":"tree"},
+       {"if":{"var":"tree.found","op":"eq","val":true},
+        "then":[{"terminate":{"reason":"找到橡树，位置已取得","result":{"pos":"$tree.pos"}}}],
+        "else":[{"terminate":{"reason":"范围内没有橡树"}}]}
+     ]
+   },
+   "expect":{"ok":true}},
+
+  {"id":"sc4","cmd":"script",
+   "params":{
+     "name":"演示-非法嵌套script应被拒",
+     "steps":[
+       {"cmd":"script","params":{"steps":[{"cmd":"status"}]}}
+     ]
+   },
+   "expect":{"ok":true}},
+
+  {"id":"sc5","cmd":"script",
+   "params":{
+     "name":"演示-循环遍历(纯assign)",
+     "vars":{"i":0,"n":3},
+     "steps":[
+       {"loop":{"while":{"var":"i","op":"lt","val":"$n"},"max_iter":10,
+         "body":[{"assign":"i","expr":"$i + 1"}]}},
+       {"terminate":{"reason":"循环结束","result":{"i":"$i"}}}
+     ]
+   },
+   "expect":{"ok":true}}
+]

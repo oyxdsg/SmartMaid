@@ -1,0 +1,53 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    maven { url = 'https://maven.aliyun.com/repository/public' }
+    maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+    // 本地 libs 目录（女仆动画引擎 Player Animation Library + mocha）
+    flatDir { dirs 'libs' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    // Player Animation Library：女仆动画引擎（HumanoidAnimationController 不依赖 Avatar，可直接用于女仆）
+    // 随模组打包进游戏（jar-in-jar，无需单独安装）；mocha 引擎由 PAL 内嵌提供
+    // Player Animation Library：女仆动画引擎（HumanoidAnimationController 不依赖 Avatar，可直接用于女仆）
+    // 随模组打包进游戏（jar-in-jar，无需单独安装）；mocha 引擎由 PAL 内嵌提供
+    implementation "player_animation_library:player_animation_library:1.2.6"
+    include "player_animation_library:player_animation_library:1.2.6"
+    // PAL 内嵌的 mocha 表达式引擎（MochaEngine 类，编译需要；运行时由 PAL 的 jar-in-jar 提供）
+    implementation "mochafloats:mochafloats:5.0.0"
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+    // 许可证与第三方声明随 jar 一起分发（jar 内含 GPL-3.0 表情数据与 CC BY-NC-SA 皮肤，
+    // 声明必须与二进制同行；见仓库根 NOTICE.md）
+    from(file("../LICENSE")) { into "META-INF" }
+    from(file("../NOTICE.md")) { into "META-INF" }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 25
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}

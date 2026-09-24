@@ -1,0 +1,22 @@
+[
+  {"id": "g1", "give": {"minecraft:oak_log": 8, "minecraft:iron_ingot": 5}},
+  {"id": "c1", "cmd": "craft_check",
+   "params": {"item": "minecraft:iron_pickaxe", "count": 1},
+   "expect": {"ok": true, "result.found": true, "result.craftable": true}},
+  {"id": "c2", "cmd": "craft",
+   "params": {"item": "minecraft:iron_pickaxe", "count": 1},
+   "expect": {"ok": true}},
+  {"id": "c3", "cmd": "craft_check",
+   "params": {"item": "minecraft:iron_ingot", "count": 1},
+   "expect": {"ok": true, "result.found": true, "result.craftable": false}},
+  {"id": "c4", "cmd": "craft",
+   "params": {"item": "minecraft:iron_ingot", "count": 1},
+   "expect": {"ok": true}},
+  {"id": "g2", "give": {"minecraft:iron_block": 1}},
+  {"id": "c5", "cmd": "craft_check",
+   "params": {"item": "minecraft:iron_ingot", "count": 1},
+   "expect": {"ok": true, "result.found": true, "result.craftable": true}},
+  {"id": "c6", "cmd": "craft",
+   "params": {"item": "minecraft:iron_ingot", "count": 1},
+   "expect": {"ok": true}}
+]

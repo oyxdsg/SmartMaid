@@ -1,0 +1,16 @@
+.gradle/
+build/
+out/
+run/
+*.log
+.idea/
+*.iml
+.vscode/
+__pycache__/
+*.py[cod]
+
+# 本机路径配置（各自填写，不入库）
+tools/local_paths.json
+
+# 监测脚本运行时输出
+tools/logs/

@@ -1,0 +1,34 @@
+# ============================================================
+# 仓库根 .gitignore
+# 说明：本仓库只跟踪「自己写的代码 + 文档 + 必要内置依赖」。
+#       第三方参考源码与下载产物不入库（体积大 / 非本项目产出）。
+# ============================================================
+
+# ---- 构建产物 / 缓存 ----
+.gradle/
+build/
+out/
+run/
+.idea/
+*.iml
+.vscode/
+*.log
+
+# ---- 第三方参考源码（车万女仆 1.20.1 Forge，约 84MB）----
+# 获取方式：TouhouLittleMaid-1.20.zip 解压，或 https://github.com/TartaricAcid/TouhouLittleMaid
+/TouhouLittleMaid/
+
+# ---- 下载产物（jar / zip 原件，约 92MB）----
+/downloads/
+
+# ---- 系统文件 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- AI 助手工作区（内部记忆/笔记，含本机路径，不入库）----
+.workbuddy/
+.claude/
+
+# ---- 运行时数据（autotest.json 是测试配置、保留入库；玩家存档不入库）----
+SmartMaid/config/**/*.dat
