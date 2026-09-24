@@ -75,6 +75,8 @@ public final class MaidTaskCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("maidtasks")
+                // P4 发布收尾：任务指令需权限等级 2
+                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 // ---- 集成指令 ----
                 .then(Commands.literal("attack")
                         .executes(ctx -> dispatch(ctx.getSource(), new AttackTask(12)))

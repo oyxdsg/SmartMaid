@@ -257,7 +257,13 @@
 - `MaidDebug.ENABLED` 改 `false`
 - 加一个图标与 `README` 的安装说明
 
-> ✅ 已完成（2026-09-10，提前）：**周期性/每帧高频日志全部收进 `MaidDebug.verbose()` 门控**（默认关）——感知快照、装备状态、Monitor 状态+地形、渲染 `extractRenderState`/`setupAnim`、挖矿/烧炼进度共 7 处；仅事件性日志默认输出。解决"数百小时游戏 `latest.log` 累积数 GB"问题。发布时仅剩 `ENABLED=false` 全局关闭。
+> ✅ **已完成（2026-09-24）**：
+> 五个命令（含开发用的 `/maidanim` `/maidperception`）加
+> `Commands.hasPermission(Commands.LEVEL_GAMEMASTERS)`——26.2 已移除旧版 `hasPermission(int)`，
+> 权限体系改为 `PermissionSet`/`PermissionCheck`，`LEVEL_GAMEMASTERS` 等同旧版等级 2；
+> `MaidDebug.ENABLED=false`；jar 内图标 `assets/smartmaid/icon.png` + `fabric.mod.json` 声明；
+> JDK25 重建 BUILD SUCCESSFUL 并开包复验。
+> （周期性高频日志收进 `verbose()` 门控一事已于 2026-09-10 提前完成。）
 
 ---
 

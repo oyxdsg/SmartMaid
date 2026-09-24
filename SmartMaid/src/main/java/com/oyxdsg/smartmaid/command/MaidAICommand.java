@@ -34,6 +34,8 @@ public final class MaidAICommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("maidai")
+                // P4 发布收尾：AI 指令桥接需权限等级 2
+                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .then(Commands.argument("json", StringArgumentType.greedyString())
                         .executes(ctx -> exec(ctx.getSource(),
                                 StringArgumentType.getString(ctx, "json")))));

@@ -24,6 +24,8 @@ public final class MaidPerceptionCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("maidperception")
+                // P4 发布收尾：感知快照调试指令需权限等级 2
+                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .executes(ctx -> dump(ctx.getSource())));
     }
 

@@ -305,7 +305,10 @@ python tools/run_e2e_test.py --quick-play "新的世界 (11)"
 - [ ] 战斗系统真机回归收尾（全流程：近战/走位/背对跳/远程/盾/进食/任务抢占）
 - [ ] 鱼竿攻击（spike 结论：`FishingHook` 非玩家 owner 首 tick 丢弃，原版不可用；暂不做）
 - [ ] 跳跃系统完整实测标定（对角跨沟、跨 3 沟上 1 格等）— P3
-- [ ] 发布前收尾（/summonmaid 权限、debug 日志关闭）— P4
+- [x] **发布前收尾 P4（2026-09-24）**：`/summonmaid` `/maidtasks` `/maidai` `/maidanim` `/maidperception`
+  加 `Commands.hasPermission(Commands.LEVEL_GAMEMASTERS)` 权限检查（26.2 新权限 API，等同旧版等级 2，
+  服务器上仅管理员可召唤；单人存档开作弊不受影响）；`MaidDebug.ENABLED=false`（事件级日志整体关闭）；
+  jar 内图标（Mod Menu 显示）
 - [ ] 基岩版模型（车万女仆 Q 版模型）渲染 — P5
 - [ ] 战斗 AI / 物品交互等更多规则
 
@@ -337,7 +340,7 @@ python tools/run_e2e_test.py --quick-play "新的世界 (11)"
 | 本项目原创代码（Java 源码、构建脚本、文档、木质 GUI 贴图） | **MIT**（见仓库根 [`LICENSE`](../LICENSE)） |
 | `entity/ai/MaidMoveControl.java` 的"触发跳跃"判断条件 | 改编自 [Touhou Little Maid](https://github.com/TartaricAcid/TouhouLittleMaid)（代码部分 MIT，Copyright © 2019-2025 tartaric_acid），文件头已保留其版权声明 |
 | `assets/smartmaid/emotes/*.json`（11 个表情动画） | 来自 [Emotecraft](https://github.com/KosmX/emotes)（KosmX）内置表情的未修改副本，**GPL-3.0** |
-| 女仆皮肤图片（`textures/entity/smart_maid.png`、仓库根 `皮肤大肥鱼.png`） | 基于"大肥鱼"角色立绘制作，**CC BY-NC-SA 4.0**（须署名 / **禁止商用** / 衍生须相同方式共享） |
+| 女仆皮肤图片（`textures/entity/smart_maid.png`、仓库根 `皮肤大肥鱼.png`）与模组图标（`assets/smartmaid/icon.png`） | 基于"大肥鱼"角色立绘制作，**CC BY-NC-SA 4.0**（须署名 / **禁止商用** / 衍生须相同方式共享） |
 | `libs/` 内置第三方库 | Player Animation Library（MIT）；mochafloats（PAL 传递依赖） |
 
 > 完整来源与条款见仓库根 [`NOTICE.md`](../NOTICE.md)。该声明也已随 jar 打包到 `META-INF/` 下，

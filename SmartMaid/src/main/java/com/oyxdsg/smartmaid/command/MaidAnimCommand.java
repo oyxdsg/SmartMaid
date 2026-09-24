@@ -43,6 +43,8 @@ public final class MaidAnimCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("maidanim")
+                // P4 发布收尾：动作调试指令需权限等级 2
+                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .then(Commands.argument("name", StringArgumentType.word())
                         .executes(ctx -> setAnim(ctx.getSource(),
                                 StringArgumentType.getString(ctx, "name"))))

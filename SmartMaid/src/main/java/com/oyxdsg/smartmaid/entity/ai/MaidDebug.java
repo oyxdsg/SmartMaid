@@ -13,8 +13,11 @@ public final class MaidDebug {
     private static final Logger LOGGER = SmartMaid.LOGGER;
     public static final String PREFIX = "[SmartMaid-Debug] ";
 
-    /** 开发模式：始终开启调试输出；发布正式版时改为 false 即可整体关闭 */
-    private static final boolean ENABLED = true;
+    /**
+     * 发布正式版：false——事件级日志整体关闭，玩家日志保持干净。
+     * 需要排查问题时改回 true 重新构建（高频日志另由 {@link #VERBOSE} 门控）。
+     */
+    private static final boolean ENABLED = false;
 
     /**
      * 高噪日志开关（地形俯视图等）：默认关闭。

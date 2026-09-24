@@ -21,6 +21,8 @@ public final class SummonMaidCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("summonmaid")
+                // P4 发布收尾：仅管理员（权限等级 2）可召唤，防止在他人服务器乱刷女仆
+                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                 .executes(ctx -> summon(ctx.getSource(), ctx.getSource().getPlayerOrException())));
     }
 
