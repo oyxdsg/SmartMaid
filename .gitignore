@@ -26,6 +26,9 @@ run/
 Thumbs.db
 desktop.ini
 
+# ---- 陈旧残留（模组真正的资源在 SmartMaid/src/main/resources/assets/ 下）----
+/assets/
+
 # ---- AI 助手工作区（内部记忆/笔记，含本机路径，不入库）----
 .workbuddy/
 .claude/
