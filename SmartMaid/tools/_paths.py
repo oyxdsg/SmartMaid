@@ -48,6 +48,15 @@ def _config():
         return {}
 
 
+def config():
+    """public：读取 tools/local_paths.json 原始键值（读不到返回 {}）。
+
+    供需要自定义键的工具复用（如 probe_api.py 的 javap / mc_jar / fabric_jar），
+    避免每个脚本各写一遍 json 读取与容错。
+    """
+    return _config()
+
+
 def _resolve(env_name, config_key, candidates):
     v = os.environ.get(env_name)
     if v and os.path.isdir(v):

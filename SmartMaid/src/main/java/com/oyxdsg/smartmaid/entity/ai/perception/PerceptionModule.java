@@ -154,6 +154,22 @@ public class PerceptionModule {
         this.eventSinks.clear();
     }
 
+    /**
+     * 主动上报一条事件（供玩法逻辑调用的公开入口）。
+     *
+     * <p>与 {@link #detectEvents} 产生的事件走同一条通道：进事件队列（随感知快照上行）+
+     * 立即通知全部 eventSink（遥测文件通道 / WebSocket {@code event} 消息）。</p>
+     *
+     * <p>用途举例：背包整理时"满了但没有垃圾可丢"，把背包摘要上报给 AI，
+     * 由 AI 决策（例如先回基地存箱子）。</p>
+     *
+     * @param type    事件类型（与既有事件同名空间，如 {@code inventory_full}）
+     * @param payload 事件负载（可为 null）
+     */
+    public void reportEvent(String type, JsonObject payload) {
+        this.pushEvent(type, payload);
+    }
+
     // ---------- 事件检测 ----------
 
     private void detectEvents(MaidPerception data) {

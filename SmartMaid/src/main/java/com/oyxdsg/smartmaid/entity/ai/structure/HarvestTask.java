@@ -7,6 +7,7 @@ import com.oyxdsg.smartmaid.entity.ai.MaidDebug;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.MaidAITask;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -18,14 +19,18 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 /**
- * 收割任务（Atomic Command Protocol §5.4）：对某结构（树/矿脉…），按 produce 谓词过滤，
- * 只破坏命中谓词的 core 方块（如只挖橡树原木不误伤金合欢；只挖铁矿石），到达 count 或
- * 该结构产物耗尽结束。BFS 从种子位置沿该 StructureType 的 core ∪ support 扩展收集目标。
+ * 收割任务（Atomic Command Protocol §5.4）：对某结构（树/矿脉…），把种子位置所在的那一团
+ * <b>相连资源</b>采完（树 = 一棵完整的树、矿 = 一个完整的矿簇），到达 count 或该结构耗尽结束。
+ * BFS 从种子位置沿 {@code core}（资源本身）扩展 —— 判据是"相连的资源"，<b>不看树种/矿种</b>：
+ * 深色橡木、白桦、橡木同样是树。{@code produce} 只用于 {@code find} 阶段挑哪一棵树。
  */
 public class HarvestTask extends MaidAITask {
 
     /** BFS 收集目标方块的硬上限（防超大组件一次扫太多，性能护栏） */
     private static final int SCAN_TARGET_LIMIT = 2000;
+
+    /** 起点容错半径：seed 已被挖掉/不匹配时，在这个半径内找最近的资源方块当起点 */
+    private static final int SEED_RECOVER_RADIUS = 2;
 
     private final BlockPos seed;
     private final Predicate<BlockState> matcher;
@@ -116,11 +121,13 @@ public class HarvestTask extends MaidAITask {
             this.done = true;
             return;
         }
-        // 取下一个可挖目标（已空/不再命中则跳过）
+        // 取下一个可挖目标：目标池在 scan() 里已经确定为"这棵相连的资源"，这里只跳过已空的
+        // （**不能再用产物谓词过滤** —— 否则深色橡木这类"同为 tree 的 core、但不匹配 produce"的
+        //  方块会被全部跳过，表现为"扫到 47 个目标却 0 个可挖"）
         while (!this.pending.isEmpty()) {
             BlockPos p = this.pending.poll();
             BlockState s = maid.level().getBlockState(p);
-            if (s.isAir() || !this.matcher.test(s)) {
+            if (s.isAir()) {
                 continue;
             }
             // 重试超限的目标直接放弃（多次被挡，玩家也挖不到）
@@ -138,16 +145,47 @@ public class HarvestTask extends MaidAITask {
         this.done = true;
     }
 
-    /** BFS 从 seed 沿 core ∪ support 扩展，收集命中 matcher 的 core */
+    /**
+     * BFS 从 seed 沿**相连的资源（core）**扩展，收集目标方块 —— 即"一棵完整的树 / 一个完整的矿簇"。
+     *
+     * <h2>判据分层（2026-09-29 定稿，前两版都错在这里）</h2>
+     * <ul>
+     *   <li><b>连通性 = core</b>（{@code #minecraft:logs} 这类"资源本身"）。木头就是木头：
+     *       深色橡木、白桦、橡木都是 tree 的 core，<b>不能因为产物谓词写着 oaks 就把别的树种开除出"树"</b>。</li>
+     *   <li><b>范围 = 相连的 core</b>：原木之间彼此相连、不同树只靠树叶相接，所以沿 core 扩展天然锁定
+     *       <b>一棵树</b>（矿同理锁一个矿簇），既不会跨树、也不需要物种过滤。</li>
+     *   <li><b>produce 不参与"哪些方块算目标"</b>：它只在 {@code find} 阶段决定"挑哪一棵树/哪个矿簇"。
+     *       结构一旦选定，就把这棵相连的资源<b>整棵采完</b>。</li>
+     * </ul>
+     *
+     * <p><b>教训（两版错误的记录）：</b>①沿 {@code core ∪ support} 扩展会把整片林子连成一个结构
+     * （真机 {@code find remaining=1424}）；②沿 {@code matcher} 扩展等于用产物谓词当连通性判据，
+     * 于是"附近有一棵深色橡木"会退化成"一个目标都没有"（真机
+     * {@code Harvest seed ... 实际 minecraft:dark_oak_log → 目标 0 个}）。</p>
+     *
+     * <p><b>起点容错：</b>seed 可能已经不是资源方块——脚本常是 {@code find → move → harvest}，
+     * move 用同一个坐标，而寻路降级直线会把挡路的目标本身挖掉。此时在
+     * {@link #SEED_RECOVER_RADIUS} 半径内找最近的 core 当起点。</p>
+     */
     private void scan(SmartMaidEntity maid) {
         Level level = maid.level();
         ArrayDeque<BlockPos> queue = new ArrayDeque<>();
         queue.add(this.seed);
         this.visited.add(this.seed.asLong());
+        if (!this.structure.coreBlock().test(level.getBlockState(this.seed))) {
+            BlockPos alt = nearestCore(level, this.seed, SEED_RECOVER_RADIUS);
+            MaidDebug.log("Harvest seed " + this.seed + " 已非资源（实际 "
+                    + BuiltInRegistries.BLOCK.getKey(level.getBlockState(this.seed).getBlock())
+                    + "），起点容错 -> " + alt);
+            if (alt != null) {
+                queue.add(alt);
+                this.visited.add(alt.asLong());
+            }
+        }
         while (!queue.isEmpty() && this.remaining < SCAN_TARGET_LIMIT) {
             BlockPos p = queue.poll();
             BlockState s = level.getBlockState(p);
-            if (this.matcher.test(s)) {
+            if (this.structure.coreBlock().test(s)) {
                 this.pending.add(p);
                 this.remaining++;
             }
@@ -156,13 +194,34 @@ public class HarvestTask extends MaidAITask {
                 if (!this.visited.add(q.asLong())) {
                     continue;
                 }
-                BlockState qs = level.getBlockState(q);
-                if (this.structure.coreBlock().test(qs) || this.structure.supportBlock().test(qs)) {
+                // 只沿资源本身（core）扩展：一棵树 = 相连的原木（不分树种）；support（树叶）会串遍整片林子
+                if (this.structure.coreBlock().test(level.getBlockState(q))) {
                     queue.add(q);
                 }
             }
         }
-        MaidDebug.log("Harvest scan: 目标 " + this.remaining + " 个");
+        MaidDebug.log("Harvest scan: 目标 " + this.remaining + " 个（seed " + this.seed
+                + " 实际 " + BuiltInRegistries.BLOCK.getKey(level.getBlockState(this.seed).getBlock())
+                + "，产物命中=" + this.matcher.test(level.getBlockState(this.seed)) + "）");
+    }
+
+    /** 在以 center 为中心、半径 radius 的立方体内找最近的 core 方块（不含 center 自身） */
+    private BlockPos nearestCore(Level level, BlockPos center, int radius) {
+        BlockPos best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (BlockPos p : BlockPos.betweenClosed(
+                center.offset(-radius, -radius, -radius),
+                center.offset(radius, radius, radius))) {
+            if (p.equals(center) || !this.structure.coreBlock().test(level.getBlockState(p))) {
+                continue;
+            }
+            double d = p.distSqr(center);
+            if (d < bestDist) {
+                bestDist = d;
+                best = p.immutable();  // betweenClosed 返回可变游标，必须拷贝
+            }
+        }
+        return best;
     }
 
     @Override
@@ -187,6 +246,10 @@ public class HarvestTask extends MaidAITask {
         out.addProperty("collected", this.collected);
         out.addProperty("remaining", Math.max(0, this.remaining));
         out.add("pos", StructureScan.posArray(this.seed));
+        // 未收到任何目标时说明原因，便于 AI 决策（换位置重试 / 放弃）
+        if (this.scanned && this.collected == 0) {
+            out.addProperty("reason", "no_target");
+        }
         return out;
     }
 }

@@ -354,8 +354,8 @@ libs/                           Player Animation Library + mocha（jar-in-jar）
 
 ### 问题 9：HMCL token 过期导致 quickPlay 不生效（端到端自动化的死结）
 
-- **现象**：用 `run_e2e_test.py --quick-play "新的世界 (11)"` 启动游戏后，进程 19:52:10 启动、19:52:23 走到主菜单，最后只剩 `Failed to fetch user properties / 401`，没有任何 `Setting user: arcoyx` 后的世界加载活动；4 个遥测窗口都是上次的，没有这轮新数据。
-- **根因**：`hmcl.json` 里 arcoyx 账号的 `accessToken` 过期（JWT.exp = 2025-08-14，距今超 1 年），HMCL 启动游戏时不会自动刷新 token，过期的 token 让游戏拒绝进入 `--quickPlaySingleplayer` 路径（虽然不会强制退出，但 world loading 永远到不了）。`run_e2e_test.py` timeout 后 taskkill 掉了一直待在主菜单的进程。
+- **现象**：用 `run_e2e_test.py --quick-play "新的世界 (11)"` 启动游戏后，进程 19:52:10 启动、19:52:23 走到主菜单，最后只剩 `Failed to fetch user properties / 401`，没有任何 `Setting user: <玩家名>` 后的世界加载活动；4 个遥测窗口都是上次的，没有这轮新数据。
+- **根因**：`hmcl.json` 里 本机微软账号的 `accessToken` 过期（JWT.exp = 2025-08-14，距今超 1 年），HMCL 启动游戏时不会自动刷新 token，过期的 token 让游戏拒绝进入 `--quickPlaySingleplayer` 路径（虽然不会强制退出，但 world loading 永远到不了）。`run_e2e_test.py` timeout 后 taskkill 掉了一直待在主菜单的进程。
 - **尝试过的解法**：
   1. 试 Microsoft OAuth2 refresh_token endpoint 用 `00000000402b2508` / `000000004C8C68AB` / Azure 等 7+ 个 client_id → 全部 `400 invalid_grant` 或 `client does not exist`，因为 HMCL 用的 client_id 没公开文档，不知道是哪个（实际上也无法查）。
   2. 用 `python launch_game.py --dry-run` → 确认参数正确附加到 `--width 854 --height 480` 之后。
@@ -1118,4 +1118,68 @@ M5 双向链路（感知下行 + 指令上行）+ M-P1 增量 diff 全部通过�
   状态行去"女仆："前缀转"我的"；决策 prompt/回执注入/状态注入全部第一人称。
 - **教训**：**"把身份告诉 AI"要一次性说透**——"你是 X"比"玩家在和 X 说话"强得多；
   且所有注入 AI 的上下文（状态/回执）的措辞要和身份一致，否则 AI 会从上下文里学回第三人称。
+
+---
+
+## 2026-09-29：整合包兼容改造 + 采集判据（6 个坑）
+
+### 坑 1：item tag 里引用了只存在于 block 命名空间的 tag
+
+- **现象**：`#smartmaid:bridge_blocks` **整个 tag 加载失败**（日志
+  `Couldn't load tag smartmaid:bridge_blocks as it is missing following references: #minecraft:base_stone_overworld`），
+  `stack.is(tag)` 恒 false → 白名单静默失效（走了回退分支所以没崩，更难发现）。
+- **根因**：`base_stone_overworld` / `base_stone_nether` **只有 block 版**，item 命名空间下不存在。
+- **教训**：**改 tag 前先核对目标命名空间**（对比 `data/minecraft/tags/item/` 与 `.../block/` 的实际清单）；
+  拿不准的引用加 `"required": false`。**一行错引用会让整个 tag 失效**，不是只忽略那一行。
+
+### 坑 2：测试结果走了"可关闭的"日志开关
+
+- **现象**：AutoTest 确实跑完了（`autotest.done.json` 时间戳对），但 `latest.log` 里**一条结果都没有**。
+- **根因**：`MaidAutoTest` 全程用 `MaidDebug.log()`，而 `MaidDebug` 在 P4 发布收尾时被关掉 →
+  断言结果与执行记录**全部静音**。日志上"跑过了"和"没跑"无法区分。
+- **教训**：**测试/诊断输出绝不能走可关闭的调试开关**，一律走 `LOGGER`（永久输出）。
+
+### 坑 3：自动化断言用了"相对女仆位置"
+
+- **现象**：`check` 用 `offset:[1,1,0]` 断言方块，部分项 FAIL —— 但功能其实是对的。
+- **根因**：女仆**跟随玩家移动**，等待若干秒后相对坐标已指向别处（`v03 → v04` 间隔 21 秒，女仆走开了）。
+- **修复**：测试框架加 `lastRun`（记录最近一次 `setblock` 的绝对坐标）+ `{lx}/{ly}/{lz}` 占位符。
+- **教训**：**凡涉及"会移动的对象"的断言都必须用绝对坐标**。
+
+### 坑 4（最典型）：同一个判据散落在"收集"和"消费"两处
+
+- **现象**：`Harvest scan: 目标 47 个` 紧跟着 `Harvest 结束（无剩余目标）collected=0` —— 矛盾。
+- **根因**：改判据时只改了 `scan()`（收集端），忘了 `tick()`（消费端）里同样的 `matcher.test` 过滤，
+  47 个目标被收进来、又在取出时全部拒掉。
+- **教训**：**改这类"判据"必须全文搜一遍**（`grep matcher.test`），确认收集端与消费端一致。
+  诊断日志里"目标 N 个"与"无剩余目标"并存，就是这类 bug 的指纹。
+
+### 坑 5：寻路降级的"放弃"没有被上层感知 → 死磕不可达目标
+
+- **现象**：`Breaker begin {280,70,58}` + `StraightNav 放弃(搭路无方块)` 每 3 秒重复 40 秒以上，女仆站着不动。
+- **根因**：`MaidStraightNav.fail()` 只是结束降级（`recentlyGaveUp` 有 60t 窗口），
+  而 `MaidBlockBreaker` 的"水平太远"分支只有 `navigateTo(...) → return false`、**没有出口** ——
+  每 20 tick 重发一次、再放弃，无限循环。`HarvestTask` 的"重试 N 次后跳过"依赖
+  `breaker.isActive() == false`，Breaker 不放手 → 上层永远不知道该换目标。
+- **修复**：Breaker 在"水平太远"与"pillar 接近"两处加 `navRecentlyGaveUp(maid)` → `clear()` 放弃目标。
+- **教训**：**"放弃/超时"这类信号要在消费端显式检查** —— 底层放弃了自己，不等于上层会知道。
+
+### 坑 6：搭路白名单漏了原木（背包有 39 根木头却报"搭路无方块"）
+
+- **现象**：女仆爬到树高处后反复 `StraightNav 放弃(搭路无方块)`，但她背包里全是刚砍的原木。
+- **根因**：`MaidBlockPlacer` 在 bridgeMode 下**只认** `#smartmaid:bridge_blocks`，而该白名单当时只有
+  泥土 / 木板 / 沙子 / 各类石头 —— **没有 `#minecraft:logs`**。
+- **修复**：白名单加 `#minecraft:logs`（先核实 26.2 的 item tag 确实存在）。
+- **教训**：**"能用什么"这类白名单要和真实场景对齐** —— 砍树场景里，手头的木头就是最自然的搭路材料。
+
+### 语义教训：采集判据分三层（三轮都错在同一处）
+
+三轮修错都是同一个毛病：**把"是不是同一个结构"和"是不是目标产物"混为一谈**。
+
+- **连通性 = `core`**（资源本身）—— 深色橡木、白桦、橡木都是 `tree` 的 core，**不能因为产物谓词写着
+  oaks 就把别的树种开除出"树"**；
+- **`produce` 只用于 `find` 挑"哪一棵树 / 哪个矿簇"**（找不到时退化返回最近的同类结构）；
+- **结构选定后整棵采完** —— 产物谓词不参与"哪些方块算目标"。
+
+完整排查过程（三轮错误 + 真机证据）见 `docs/ISSUES_TREE_AND_INVENTORY.md` §二。
 

@@ -12,6 +12,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.PermissionCheck;
 import net.minecraft.world.entity.Entity;
 
 /**
@@ -32,10 +33,10 @@ public final class MaidAICommand {
     private MaidAICommand() {
     }
 
-    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+    /** @param permission 见 {@code SmartMaidConfig.commandPermission(selection)} */
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher, PermissionCheck permission) {
         dispatcher.register(Commands.literal("maidai")
-                // P4 发布收尾：AI 指令桥接需权限等级 2
-                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .requires(Commands.hasPermission(permission))
                 .then(Commands.argument("json", StringArgumentType.greedyString())
                         .executes(ctx -> exec(ctx.getSource(),
                                 StringArgumentType.getString(ctx, "json")))));

@@ -17,11 +17,11 @@ import java.nio.file.Path;
  *
  * <pre>{@code
  * {
- *   "enabled": true,                      // 总开关（遥测下行）
+ *   "enabled": false,                     // 总开关（遥测下行）；默认关 —— 整合包/服务器通常没有桌宠
  *   "deskpetDir": "",                     // 遥测目录，留空 = <游戏目录>/deskpet/maid
  *   "windowTicks": 400,                   // 遥测窗口聚合周期（20s）
  *   "ws": {
- *     "enabled": true,                    // 上行通道总开关
+ *     "enabled": false,                   // 上行通道总开关；默认关
  *     "url": "ws://127.0.0.1:21420",      // 桌宠侧 WebSocket Server
  *     "token": "",                        // 握手 token，与桌宠配置一致（留空 = 不校验）
  *     "heartbeatSec": 5,
@@ -29,6 +29,11 @@ import java.nio.file.Path;
  *   }
  * }
  * }</pre>
+ *
+ * <p><b>默认关闭的理由</b>（2026-09-29）：桥接只对"本机跑着桌宠"的用户有意义。
+ * 默认开启会导致：没有桌宠的整合包/服务器每次启动都白建 {@code deskpet/} 目录写文件、
+ * 并持续空连 {@code ws://127.0.0.1:21420}（指数退避）。已有配置文件不会被覆盖，
+ * 所以老用户升级后行为不变；新装用户需要联动时手动改 true。</p>
  *
  * <p>加载时机：首次访问任意 getter 时懒加载一次（服务端线程调用）。</p>
  */
@@ -40,10 +45,10 @@ public final class BridgeConfig {
     private static final int DEFAULT_WINDOW_TICKS = 400;
 
     private static boolean loaded;
-    private static boolean enabled = true;
+    private static boolean enabled = false;
     private static Path deskpetDir;
     private static int windowTicks = DEFAULT_WINDOW_TICKS;
-    private static boolean wsEnabled = true;
+    private static boolean wsEnabled = false;
     private static String wsUrl = "ws://127.0.0.1:21420";
     private static String wsToken = "";
     private static int heartbeatSec = 5;
@@ -78,11 +83,12 @@ public final class BridgeConfig {
 
     private static JsonObject defaults() {
         JsonObject cfg = new JsonObject();
-        cfg.addProperty("enabled", true);
+        // 默认关闭：无桌宠的整合包/服务器不该产生多余 IO 与空连接
+        cfg.addProperty("enabled", false);
         cfg.addProperty("deskpetDir", "");
         cfg.addProperty("windowTicks", DEFAULT_WINDOW_TICKS);
         JsonObject ws = new JsonObject();
-        ws.addProperty("enabled", true);
+        ws.addProperty("enabled", false);
         ws.addProperty("url", "ws://127.0.0.1:21420");
         ws.addProperty("token", "");
         ws.addProperty("heartbeatSec", 5);

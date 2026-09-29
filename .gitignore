@@ -35,3 +35,7 @@ desktop.ini
 
 # ---- 运行时数据（autotest.json 是测试配置、保留入库；玩家存档不入库）----
 SmartMaid/config/**/*.dat
+
+# ---- 本机路径覆盖（工具脚本用；含本机绝对路径，不入库）----
+SmartMaid/tools/local_paths.json
+**/local_paths.json

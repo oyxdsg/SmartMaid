@@ -11,6 +11,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.PermissionCheck;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 
@@ -19,10 +20,14 @@ public final class SummonMaidCommand {
     private SummonMaidCommand() {
     }
 
-    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+    /**
+     * @param permission 权限等级，由 {@code SmartMaidConfig.commandPermission(selection)} 决定：
+     *                   单人（集成服务器）默认 {@code LEVEL_ALL} —— 整合包玩家不开作弊也能召唤；
+     *                   专用服务器保持 {@code LEVEL_GAMEMASTERS}。
+     */
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher, PermissionCheck permission) {
         dispatcher.register(Commands.literal("summonmaid")
-                // P4 发布收尾：仅管理员（权限等级 2）可召唤，防止在他人服务器乱刷女仆
-                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .requires(Commands.hasPermission(permission))
                 .executes(ctx -> summon(ctx.getSource(), ctx.getSource().getPlayerOrException())));
     }
 

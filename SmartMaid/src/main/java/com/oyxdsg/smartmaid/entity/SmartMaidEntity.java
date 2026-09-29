@@ -7,6 +7,7 @@ import com.oyxdsg.smartmaid.entity.ai.MaidActionExecutor;
 import com.oyxdsg.smartmaid.entity.ai.MaidFollowGoal;
 import com.oyxdsg.smartmaid.entity.ai.MaidGroundPathNavigation;
 import com.oyxdsg.smartmaid.entity.ai.MaidMonitor;
+import com.oyxdsg.smartmaid.entity.ai.MaidInventoryTidy;
 import com.oyxdsg.smartmaid.entity.ai.MaidMoveControl;
 import com.oyxdsg.smartmaid.entity.ai.bridge.MaidTelemetryWriter;
 import com.oyxdsg.smartmaid.entity.ai.combat.MaidCombatGoal;
@@ -816,6 +817,10 @@ public class SmartMaidEntity extends TamableAnimal implements ContainerUser {
         // 照抄原版语义：返回「成功取走的量」（非空 = 取走这么多），剩余留在掉落物里。
         // 只放入背包/热键区（0-35），绝不进入盔甲/副手槽（避免"穿上任何物品"）。
         ItemStack remaining = addToMaidStorage(stack);
+        if (remaining.getCount() == stack.getCount() && MaidInventoryTidy.tidyIfStuck(this)) {
+            // 一件都没放进（背包满/碎片化）→ 整理后重试一次，避免掉落物一直捡不起来
+            remaining = addToMaidStorage(stack);
+        }
         int taken = stack.getCount() - remaining.getCount();
         if (taken <= 0) {
             return ItemStack.EMPTY;

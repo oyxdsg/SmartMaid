@@ -1,0 +1,254 @@
+[
+  {
+    "id": "t00",
+    "cmd": "status",
+    "expect": {
+      "ok": true
+    }
+  },
+  {
+    "id": "prep1",
+    "give": {
+      "minecraft:dirt": 64,
+      "minecraft:diamond_block": 1,
+      "minecraft:chest": 1,
+      "minecraft:beacon": 1,
+      "minecraft:oak_planks": 16
+    }
+  },
+  {
+    "id": "c01",
+    "check": {
+      "bridge": {
+        "item": "minecraft:cobblestone",
+        "allowed": true
+      }
+    }
+  },
+  {
+    "id": "c02",
+    "check": {
+      "bridge": {
+        "item": "minecraft:dirt",
+        "allowed": true
+      }
+    }
+  },
+  {
+    "id": "c03",
+    "check": {
+      "bridge": {
+        "item": "minecraft:oak_planks",
+        "allowed": true
+      }
+    }
+  },
+  {
+    "id": "c04",
+    "check": {
+      "bridge": {
+        "item": "minecraft:deepslate",
+        "allowed": true
+      }
+    }
+  },
+  {
+    "id": "c05",
+    "check": {
+      "bridge": {
+        "item": "minecraft:gravel",
+        "allowed": true
+      }
+    }
+  },
+  {
+    "id": "c06",
+    "check": {
+      "bridge": {
+        "item": "minecraft:diamond_block",
+        "allowed": false
+      }
+    }
+  },
+  {
+    "id": "c07",
+    "check": {
+      "bridge": {
+        "item": "minecraft:chest",
+        "allowed": false
+      }
+    }
+  },
+  {
+    "id": "c08",
+    "check": {
+      "bridge": {
+        "item": "minecraft:beacon",
+        "allowed": false
+      }
+    }
+  },
+  {
+    "id": "c09",
+    "check": {
+      "bridge": {
+        "item": "minecraft:netherite_block",
+        "allowed": false
+      }
+    }
+  },
+  {
+    "id": "g01",
+    "check": {
+      "tag": {
+        "tag": "smartmaid:never_target",
+        "entity": "minecraft:enderman",
+        "contains": true
+      }
+    }
+  },
+  {
+    "id": "g02",
+    "check": {
+      "tag": {
+        "tag": "smartmaid:never_target",
+        "entity": "minecraft:zombified_piglin",
+        "contains": true
+      }
+    }
+  },
+  {
+    "id": "g03",
+    "check": {
+      "tag": {
+        "tag": "smartmaid:never_target",
+        "entity": "minecraft:zombie",
+        "contains": false
+      }
+    }
+  },
+  {
+    "id": "d01",
+    "run": "setblock {x+1} {y+1} {z} minecraft:stone"
+  },
+  {
+    "id": "d02",
+    "check": {
+      "block": {
+        "at": "lastRun",
+        "is": "minecraft:stone"
+      }
+    }
+  },
+  {
+    "id": "d03",
+    "cmd": "break",
+    "params": {
+      "pos": [
+        "{lx}",
+        "{ly}",
+        "{lz}"
+      ]
+    }
+  },
+  {
+    "id": "d04",
+    "check": {
+      "block": {
+        "at": "lastRun",
+        "is": "minecraft:air"
+      }
+    }
+  },
+  {
+    "id": "d05",
+    "check": {
+      "inv": {
+        "item": "minecraft:cobblestone",
+        "min": 1
+      }
+    }
+  },
+  {
+    "id": "v01",
+    "run": "setblock {x+1} {y+1} {z} minecraft:stone"
+  },
+  {
+    "id": "v02",
+    "vetoNextBreak": true
+  },
+  {
+    "id": "v03",
+    "cmd": "break",
+    "params": {
+      "pos": [
+        "{lx}",
+        "{ly}",
+        "{lz}"
+      ]
+    }
+  },
+  {
+    "id": "v04",
+    "check": {
+      "block": {
+        "at": "lastRun",
+        "is": "minecraft:stone"
+      }
+    }
+  },
+  {
+    "id": "z01",
+    "run": "setblock {lx} {ly} {lz} air"
+  },
+  {
+    "__comment": "T1x 背包整理（合并同类 + 丢弃 #smartmaid:junk；丢在女仆身后一格）"
+  },
+  {
+    "id": "t01",
+    "give": {
+      "minecraft:oak_sapling": 8,
+      "minecraft:rotten_flesh": 6,
+      "minecraft:cobblestone": 10
+    }
+  },
+  {
+    "id": "t02",
+    "tidy": true
+  },
+  {
+    "id": "t03",
+    "check": {
+      "inv": {
+        "item": "minecraft:oak_sapling",
+        "is": 0
+      }
+    }
+  },
+  {
+    "id": "t04",
+    "check": {
+      "inv": {
+        "item": "minecraft:rotten_flesh",
+        "is": 0
+      }
+    }
+  },
+  {
+    "id": "t05",
+    "check": {
+      "inv": {
+        "item": "minecraft:cobblestone",
+        "min": 10
+      }
+    }
+  },
+  {
+    "id": "t06",
+    "check": {
+      "freeSlots": {
+        "min": 1
+      }
+    }
+  }
+]

@@ -11,6 +11,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.PermissionCheck;
 import net.minecraft.world.entity.Entity;
 
 /**
@@ -22,10 +23,10 @@ public final class MaidPerceptionCommand {
     private MaidPerceptionCommand() {
     }
 
-    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+    /** @param permission 见 {@code SmartMaidConfig.commandPermission(selection)} */
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher, PermissionCheck permission) {
         dispatcher.register(Commands.literal("maidperception")
-                // P4 发布收尾：感知快照调试指令需权限等级 2
-                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                .requires(Commands.hasPermission(permission))
                 .executes(ctx -> dump(ctx.getSource())));
     }
 

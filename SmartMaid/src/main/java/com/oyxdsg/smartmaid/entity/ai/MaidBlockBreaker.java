@@ -62,6 +62,17 @@ public class MaidBlockBreaker {
         return this.target;
     }
 
+    /**
+     * 寻路降级是否刚刚放弃过（{@link MaidStraightNav#recentlyGaveUp(int)}）。
+     *
+     * <p>含义："直线过去也过不去"—— 挡路的挖不动、或需要搭方块但没有建材。
+     * 此时再重试导航没有意义，应当放弃当前目标、让调用方换一个。</p>
+     */
+    private boolean navRecentlyGaveUp(SmartMaidEntity maid) {
+        return maid.getNavigation() instanceof MaidGroundPathNavigation nav
+                && nav.getStraightNav().recentlyGaveUp(maid.tickCount);
+    }
+
     /** 开始挖 pos；返回 false = 方块已空 / 不可破坏（computeMiningTicks < 0） */
     public boolean begin(SmartMaidEntity maid, BlockPos pos) {
         if (maid.level().isClientSide()) {
@@ -184,6 +195,12 @@ public class MaidBlockBreaker {
                     maid.getMoveControl().setWantedPosition(
                             this.target.getX() + 0.5D, this.target.getY(), this.target.getZ() + 0.5D, 1.0D);
                 } else if (maid.getNavigation().isDone() || maid.tickCount % 20 == 0) {
+                    // 导航不可达（同分支 3）→ 放弃该目标，避免死磕
+                    if (navRecentlyGaveUp(maid)) {
+                        MaidDebug.log("Breaker 导航不可达（降级放弃），放弃目标 " + this.target);
+                        this.clear();
+                        return false;
+                    }
                     MaidActions.navigateTo(maid, this.target, 1.0D);
                 }
                 return false;
@@ -204,6 +221,14 @@ public class MaidBlockBreaker {
                 maid.getMoveControl().setWantedPosition(
                         this.target.getX() + 0.5D, this.target.getY(), this.target.getZ() + 0.5D, 1.0D);
             } else if (maid.getNavigation().isDone() || maid.tickCount % 20 == 0) {
+                // 寻路降级刚放弃（物理过不去 / 没建材搭路）→ 该目标不可达，放弃它，
+                // 由调用方（HarvestTask 等）换下一个目标。否则会无限重试同一个目标
+                // （真机：爬到树高处建材耗尽后 StraightNav 每 3 秒"搭路无方块"一次，卡死 40 秒）
+                if (navRecentlyGaveUp(maid)) {
+                    MaidDebug.log("Breaker 导航不可达（降级放弃），放弃目标 " + this.target);
+                    this.clear();
+                    return false;
+                }
                 MaidActions.navigateTo(maid, this.target, 1.0D);
             }
             return false;

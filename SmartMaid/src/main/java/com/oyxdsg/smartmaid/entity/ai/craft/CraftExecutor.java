@@ -2,6 +2,7 @@ package com.oyxdsg.smartmaid.entity.ai.craft;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.oyxdsg.smartmaid.data.SmartMaidConfig;
 import com.oyxdsg.smartmaid.entity.SmartMaidEntity;
 import com.oyxdsg.smartmaid.entity.ai.MaidActions;
 import com.oyxdsg.smartmaid.entity.ai.MaidDebug;
@@ -9,7 +10,10 @@ import it.unimi.dsi.fastutil.ints.IntList;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.TagKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
@@ -50,6 +54,64 @@ import java.util.Set;
 public final class CraftExecutor {
 
     private CraftExecutor() {
+    }
+
+    /** 可合成产物白名单（{@code craftWhitelistMode=tag} 时生效）：data/smartmaid/tags/item/craftable.json */
+    private static final TagKey<Item> CRAFTABLE =
+            TagKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath("smartmaid", "craftable"));
+
+    /**
+     * 全量 crafting 配方缓存（2026-09-29，整合包兼容）。
+     *
+     * <p>只用于兜底路径（目标物品没有自带 {@code DataComponents.RECIPES} 时）。整合包配方可达
+     * 数千条，原先每次合成/预检都要全表扫描；现在只扫一次并缓存。</p>
+     *
+     * <p>失效时机：服务器启动时调 {@link #invalidateCache()}。
+     * 注意 {@code /reload} 后新增的配方在本次运行期间不会被缓存看到 —— 可接受的取舍，
+     * 女仆按服务器启动时的配方集工作。</p>
+     */
+    private static volatile List<RecipeHolder<CraftingRecipe>> allCraftingCache;
+
+    /** 清空配方缓存（服务器启动后调用） */
+    public static void invalidateCache() {
+        allCraftingCache = null;
+        MaidDebug.log("CraftExecutor 配方缓存已清空");
+    }
+
+    /** 全量 crafting 配方（带缓存；仅在物品没带 RECIPES 组件时使用） */
+    private static List<RecipeHolder<CraftingRecipe>> allCraftingRecipes(RecipeManager rm) {
+        List<RecipeHolder<CraftingRecipe>> cache = allCraftingCache;
+        if (cache == null) {
+            List<RecipeHolder<CraftingRecipe>> list = new ArrayList<>();
+            for (RecipeHolder<?> holder : rm.getRecipes()) {
+                if (holder.value().getType() == RecipeType.CRAFTING
+                        && holder.value() instanceof CraftingRecipe) {
+                    list.add((RecipeHolder<CraftingRecipe>) (RecipeHolder<?>) holder);
+                }
+            }
+            cache = List.copyOf(list);
+            allCraftingCache = cache;
+        }
+        return cache;
+    }
+
+    /**
+     * 合成白名单判定：整合包作者可用它限制"女仆能凭空合成什么"，
+     * 避免绕过整合包刻意设计的进度门槛。
+     *
+     * <p>{@code craftWhitelistMode}（config/smartmaid/main.json）：</p>
+     * <ul>
+     *   <li>{@code off}（默认）—— 不限制，保持既有能力；</li>
+     *   <li>{@code vanilla-only} —— 只允许原版（{@code minecraft:}）命名空间的配方；</li>
+     *   <li>{@code tag} —— 只允许产物在 {@code #smartmaid:craftable} tag 内的配方。</li>
+     * </ul>
+     */
+    private static boolean craftAllowed(RecipeHolder<CraftingRecipe> holder, ItemStack target) {
+        return switch (SmartMaidConfig.craftWhitelistMode()) {
+            case "vanilla-only" -> "minecraft".equals(holder.id().identifier().getNamespace());
+            case "tag" -> target.is(CRAFTABLE);
+            default -> true;
+        };
     }
 
     /** 一次合成的构建结果：CraftingInput + 每背包槽消耗量 + 产物 */
@@ -298,17 +360,21 @@ public final class CraftExecutor {
         if (keys != null && !keys.isEmpty()) {
             for (ResourceKey<Recipe<?>> key : keys) {
                 rm.byKey(key).ifPresent(holder -> {
-                    if (holder.value() instanceof CraftingRecipe cr) {
+                    if (holder.value() instanceof CraftingRecipe) {
                         // byKey 返回 RecipeHolder<?>，强转目标类型（泛型擦除安全）
-                        candidates.add((RecipeHolder<CraftingRecipe>) (RecipeHolder<?>) holder);
+                        RecipeHolder<CraftingRecipe> cr = (RecipeHolder<CraftingRecipe>) (RecipeHolder<?>) holder;
+                        if (craftAllowed(cr, target)) {
+                            candidates.add(cr);
+                        }
                     }
                 });
             }
             return candidates;
         }
-        for (RecipeHolder<?> holder : rm.getRecipes()) {
-            if (holder.value().getType() == RecipeType.CRAFTING && holder.value() instanceof CraftingRecipe cr) {
-                candidates.add((RecipeHolder<CraftingRecipe>) (RecipeHolder<?>) holder);
+        // 兜底：目标物品没带 RECIPES 组件 → 用缓存的全量 crafting 列表（避免每次全表扫描）
+        for (RecipeHolder<CraftingRecipe> holder : allCraftingRecipes(rm)) {
+            if (craftAllowed(holder, target)) {
+                candidates.add(holder);
             }
         }
         return candidates;
@@ -415,15 +481,17 @@ public final class CraftExecutor {
             for (ResourceKey<Recipe<?>> key : keys) {
                 rm.byKey(key).ifPresent(holder -> {
                     if (holder.value() instanceof CraftingRecipe) {
-                        candidates.add((RecipeHolder<CraftingRecipe>) (RecipeHolder<?>) holder);
+                        RecipeHolder<CraftingRecipe> cr = (RecipeHolder<CraftingRecipe>) (RecipeHolder<?>) holder;
+                        if (craftAllowed(cr, target)) {
+                            candidates.add(cr);
+                        }
                     }
                 });
             }
         } else {
-            for (RecipeHolder<?> holder : rm.getRecipes()) {
-                if (holder.value().getType() == RecipeType.CRAFTING
-                        && holder.value() instanceof CraftingRecipe) {
-                    candidates.add((RecipeHolder<CraftingRecipe>) (RecipeHolder<?>) holder);
+            for (RecipeHolder<CraftingRecipe> holder : allCraftingRecipes(rm)) {
+                if (craftAllowed(holder, target)) {
+                    candidates.add(holder);
                 }
             }
         }

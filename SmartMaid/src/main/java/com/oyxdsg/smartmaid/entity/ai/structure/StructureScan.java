@@ -58,6 +58,10 @@ public final class StructureScan {
         BlockPos center = maid.blockPosition();
         int limit = st.scanBlockLimit();
         int scanned = 0;
+        // 退化候选：最近的"结构合法、但产物不匹配"的组件。
+        // 若整轮扫描都找不到产物匹配的结构，就返回它并标注 produce_match=false ——
+        // 深色橡木也是树，不能因为产物谓词写着 oaks 就让女仆"看不见树"。
+        JsonObject fallback = null;
 
         for (int r = range; r <= maxRange; r += expand) {
             if (MaidDebug.verbose()) {
@@ -84,6 +88,11 @@ public final class StructureScan {
                         MaidDebug.log("Script find 过滤: structure=" + structureId + " produce=" + produce
                                 + " 组件 core=" + comp.coreCount() + " 未命中产物");
                     }
+                    if (fallback == null) {
+                        fallback = buildResult(maid, level, st, comp, filter.matcher());
+                        fallback.addProperty("produce_match", false);
+                        fallback.addProperty("note", "附近没有匹配产物的结构，返回最近的同类结构");
+                    }
                     continue;
                 }
                 if (filter.species() != null && !hasSpeciesLeaves(level, comp, filter.species())) {
@@ -94,6 +103,7 @@ public final class StructureScan {
                     continue;
                 }
                 JsonObject hit = buildResult(maid, level, st, comp, filter.matcher());
+                hit.addProperty("produce_match", true);
                 MaidDebug.log("Script find 命中: " + structureId + " pos=" + hit.get("pos")
                         + " remaining=" + comp.coreCount() + " matches=" + hit.get("produce_matches"));
                 return hit;
@@ -101,6 +111,11 @@ public final class StructureScan {
             if (scanned > limit) {
                 break;
             }
+        }
+        if (fallback != null) {
+            MaidDebug.log("Script find 退化命中(附近无匹配产物的结构): " + structureId
+                    + " pos=" + fallback.get("pos") + " matches=" + fallback.get("produce_matches"));
+            return fallback;
         }
         MaidDebug.log("Script find 未命中: structure=" + structureId + " produce=" + produce
                 + " searched=" + maxRange + " scanned=" + scanned);
@@ -171,7 +186,17 @@ public final class StructureScan {
         return false;
     }
 
-    /** 命中结果：pos=离女仆最近的 core；produce_matches=组件内命中谓词的方块类型去重；remaining=组件 core 数 */
+    /**
+     * 命中结果：pos=**离女仆最近的 core**（core = 资源本身，如 {@code #logs} 含所有木头）；
+     * produce_matches=组件内命中产物谓词的方块类型去重；remaining=组件 core 数。
+     *
+     * <p><b>pos 为什么用 core 而不是"命中产物的 core"（2026-09-29 定稿）：</b>
+     * 结构层的判据是<b>资源本身</b>——{@code structure=tree} 时"树"指相连的原木，
+     * 深色橡木、白桦、橡木同样是树。{@code produce}（如 {@code #minecraft:oak_logs}）只用于
+     * <b>挑哪一棵树</b>（{@code matchesProduce}），不该反过来定义"什么算树"，
+     * 否则附近有棵深色橡木时会退化成"一个目标都没有"（真机
+     * {@code Harvest seed ... 实际 minecraft:dark_oak_log → 目标 0 个}）。</p>
+     */
     private static JsonObject buildResult(SmartMaidEntity maid, Level level, StructureType st,
                                           StructureComponent comp, Predicate<BlockState> matcher) {
         BlockPos nearest = null;

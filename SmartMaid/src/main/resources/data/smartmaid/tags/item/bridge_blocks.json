@@ -1,0 +1,32 @@
+{
+  "values": [
+    "#minecraft:dirt",
+    "#minecraft:planks",
+    "#minecraft:logs",
+    "#minecraft:sand",
+    "minecraft:stone",
+    "minecraft:granite",
+    "minecraft:diorite",
+    "minecraft:andesite",
+    "minecraft:deepslate",
+    "minecraft:tuff",
+    "minecraft:cobblestone",
+    "minecraft:cobbled_deepslate",
+    "minecraft:mud",
+    "minecraft:gravel",
+    "minecraft:netherrack",
+    "minecraft:end_stone",
+    {
+      "id": "#c:cobblestones",
+      "required": false
+    },
+    {
+      "id": "#c:stones",
+      "required": false
+    },
+    {
+      "id": "#c:dirt",
+      "required": false
+    }
+  ]
+}

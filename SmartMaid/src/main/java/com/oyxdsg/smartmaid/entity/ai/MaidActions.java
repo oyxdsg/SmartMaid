@@ -1,10 +1,17 @@
 package com.oyxdsg.smartmaid.entity.ai;
 
+import com.oyxdsg.smartmaid.data.SmartMaidConfig;
 import com.oyxdsg.smartmaid.entity.SmartMaidEntity;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
@@ -144,9 +151,24 @@ public final class MaidActions {
         return true;
     }
 
-    /** 把物品收纳进背包区（0-35）：先同类堆叠，再找空槽；返回未放下的剩余。 */
+    /**
+     * 把物品收纳进背包区（0-35）：先同类堆叠，再找空槽；返回未放下的剩余。
+     *
+     * <p>若当下放不下，先让 {@link MaidInventoryTidy} 整理一次背包（合并同类 + 丢垃圾），
+     * 再重试一次 —— 否则"背包碎片化/塞满"会让掉落物一直留在原地。</p>
+     */
     public static ItemStack storeToBackpack(SmartMaidEntity maid, ItemStack stack) {
         SimpleContainer inv = maid.getMaidInventory();
+        ItemStack remaining = tryInsert(inv, stack);
+        if (!remaining.isEmpty() && MaidInventoryTidy.tidyIfStuck(maid)) {
+            remaining = tryInsert(inv, remaining);
+        }
+        inv.setChanged();
+        return remaining;
+    }
+
+    /** 单次放入尝试：先同类堆叠，再找空槽；返回未放下的剩余。 */
+    private static ItemStack tryInsert(SimpleContainer inv, ItemStack stack) {
         ItemStack remaining = stack.copy();
         for (int i = 0; i < 36 && !remaining.isEmpty(); i++) {
             ItemStack existing = inv.getItem(i);
@@ -163,7 +185,6 @@ public final class MaidActions {
                 remaining = ItemStack.EMPTY;
             }
         }
-        inv.setChanged();
         return remaining;
     }
 
@@ -294,12 +315,34 @@ public final class MaidActions {
 
     // ---------- 搭路方块选择（只用普通建材，不浪费贵重物品） ----------
 
-    /** 是否为可用来搭路的方块：必须是非贵重/非危险/非特殊的 BlockItem */
+    /** 搭路白名单：只有该 tag 内的方块才允许被消耗。数据包可覆盖（data/smartmaid/tags/item/bridge_blocks.json） */
+    private static final TagKey<Item> BRIDGE_BLOCKS =
+            TagKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath("smartmaid", "bridge_blocks"));
+
+    /**
+     * 是否为可用来搭路的方块。
+     *
+     * <p><b>2026-09-29 改造：黑名单 → 白名单。</b>原逻辑是"不在 {@link #VALUABLE_BLOCKS} 黑名单里的都能用"，
+     * 而黑名单是封闭集合 —— 整合包新增的贵重方块（其它 mod 的矿物块 / 机器 / 容器）不在名单内，
+     * 会被女仆当砖头消耗掉。现在只有白名单 tag 内的便宜建材可用，未知方块一律安全。</p>
+     *
+     * <p>兼容：白名单 tag 为空时回退到旧的黑名单行为，避免数据包异常导致女仆完全无法搭路。</p>
+     */
     public static boolean isBridgeBlock(ItemStack stack) {
         if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)) {
             return false;
         }
-        return !VALUABLE_BLOCKS.contains(blockItem.getBlock());
+        Block block = blockItem.getBlock();
+        if (SmartMaidConfig.bridgeBlocksBlacklist().contains(block)) {
+            return false; // config 追加黑名单优先级最高
+        }
+        if (stack.is(BRIDGE_BLOCKS)) {
+            return true;
+        }
+        // 回退（白名单 tag 未加载/为空）：保持旧行为，避免"数据包出事 → 女仆不能搭路"
+        boolean whitelistEmpty =
+                !BuiltInRegistries.ITEM.getTagOrEmpty(BRIDGE_BLOCKS).iterator().hasNext();
+        return whitelistEmpty && !VALUABLE_BLOCKS.contains(block);
     }
 
     /** 搭路方块优先级：分数越小越优先消耗（0=泥土/圆石/石头等最普通；重力方块排最后） */
@@ -372,9 +415,18 @@ public final class MaidActions {
     }
 
     /**
-     * 破坏指定方块并把掉落物直接收进背包（0-35）：swing + 工具耐久损耗 +
-     * {@link Block#getDrops} 按工具（含时运附魔）计算掉落 → {@link #storeToBackpack}。
-     * 背包满的剩余用 {@link Block#popResource} 掉到方块位置（避免凭空消失）。
+     * 破坏指定方块并把掉落物直接收进背包（0-35）。
+     *
+     * <p><b>2026-09-29 改造（整合包兼容）</b>：不再绕过原版破坏流程。按玩家破坏的顺序补齐五步：</p>
+     * <ol>
+     *   <li>{@code PlayerBlockBreakEvents.BEFORE} —— 其他 mod / 领地保护可以返回 false 否决；</li>
+     *   <li>{@code Block.playerWillDestroy} —— mod 机器/容器的数据保存钩子（返回值可能替换方块状态）；</li>
+     *   <li>{@code level.destroyBlock(...)} —— 原版掉落 + gameEvent + 音效粒子 + 邻居更新；</li>
+     *   <li>掉落自行收进背包（保持"进背包"的既有设计，drop=false 避免散落一地）；</li>
+     *   <li>{@code PlayerBlockBreakEvents.AFTER}。</li>
+     * </ol>
+     *
+     * <p>身份由 {@link MaidActor} 提供：以主人的 FakePlayer 执行，使领地/权限/统计按主人判定。</p>
      */
     public static boolean breakBlock(SmartMaidEntity maid, BlockPos pos) {
         if (maid.level().isClientSide() || !(maid.level() instanceof ServerLevel level)) {
@@ -387,21 +439,53 @@ public final class MaidActions {
         if (!isWithinReach(maid, pos, 4.0D)) {
             return false;
         }
+        ServerPlayer actor = MaidActor.actorFor(maid);
+        if (actor == null) {
+            return false;
+        }
+        BlockEntity blockEntity = state.hasBlockEntity() ? level.getBlockEntity(pos) : null;
+
+        // ① 破坏前事件：其他 mod / 领地保护可返回 false 否决（女仆会放弃这个方块）
+        if (!PlayerBlockBreakEvents.BEFORE.invoker()
+                .beforeBlockBreak(level, actor, pos, state, blockEntity)) {
+            MaidDebug.log("breakBlock 被事件否决 " + pos);
+            return false;
+        }
+
+        // ② mod 方块的破坏钩子。返回值与原 state 不同 => "方块没被破坏、只是变了状态"
+        //    （典型：双半砖挖掉一半），此时不执行后续的移除与掉落。
+        BlockState willDestroy = state.getBlock().playerWillDestroy(level, pos, state, actor);
+        if (willDestroy != state) {
+            level.setBlock(pos, willDestroy, 3);
+            PlayerBlockBreakEvents.AFTER.invoker()
+                    .afterBlockBreak(level, actor, pos, willDestroy, blockEntity);
+            maid.swing(InteractionHand.MAIN_HAND);
+            MaidDebug.log("breakBlock 状态变更 " + pos + " -> " + willDestroy);
+            return true;
+        }
+
         maid.swing(InteractionHand.MAIN_HAND);
         ItemStack tool = maid.getMainHandItem();
         if (!tool.isEmpty()) {
             tool.hurtAndBreak(1, maid, EquipmentSlot.MAINHAND);
         }
-        BlockEntity blockEntity = state.hasBlockEntity() ? level.getBlockEntity(pos) : null;
-        for (ItemStack drop : Block.getDrops(state, level, pos, blockEntity, maid, tool)) {
-            ItemStack left = storeToBackpack(maid, drop);
-            if (!left.isEmpty()) {
-                Block.popResource(level, pos, left);
+
+        // ③ 原版破坏：drop=false（掉落自己收）→ ④ 掉落进背包，背包满则掉在原地
+        boolean removed = level.destroyBlock(pos, false, actor, 512);
+        if (removed) {
+            for (ItemStack drop : Block.getDrops(state, level, pos, blockEntity, actor, tool)) {
+                ItemStack left = storeToBackpack(maid, drop);
+                if (!left.isEmpty()) {
+                    Block.popResource(level, pos, left);
+                }
             }
         }
-        level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
-        MaidDebug.log("breakBlock " + pos + " " + state.getBlock());
-        return true;
+
+        // ⑤ 破坏后事件
+        PlayerBlockBreakEvents.AFTER.invoker()
+                .afterBlockBreak(level, actor, pos, state, blockEntity);
+        MaidDebug.log("breakBlock " + pos + " " + state.getBlock() + " -> " + removed);
+        return removed;
     }
 
     /**
@@ -485,35 +569,58 @@ public final class MaidActions {
     }
 
     /**
-     * 手持方块放置到目标格（null-player 方案，借鉴车万女仆）。
-     * 放置成功由 {@link BlockItem#place} 内部扣减手持物品。
+     * 手持方块放置到目标格。
+     *
+     * <p><b>2026-09-29 改造（整合包兼容）</b>：改用公开构造
+     * {@code BlockPlaceContext(Player, InteractionHand, ItemStack, BlockHitResult)}，
+     * 以 {@link MaidActor}（主人的 FakePlayer）作玩家上下文。原先传 {@code null} 玩家
+     * 虽然原版能容忍，但第三方 mod 的 {@link BlockItem} 子类常直接访问 player
+     * （潜行判定 / 归属 / 统计）→ NPE 崩溃。</p>
+     *
+     * <p>注意：这里传的仍是 {@code maid.getMainHandItem()}，扣减作用在女仆手上
+     * （不能传 actor 的手持，否则会扣错人的物品）。</p>
      */
     public static boolean placeBlock(SmartMaidEntity maid, BlockPos pos, Direction dir) {
         ItemStack stack = maid.getMainHandItem();
         if (!(stack.getItem() instanceof BlockItem blockItem)) {
             return false;
         }
+        ServerPlayer actor = MaidActor.actorFor(maid);
+        if (actor == null) {
+            return false;
+        }
         BlockHitResult hit = new BlockHitResult(
                 Vec3.atCenterOf(pos).add(dir.getStepX() * 0.5D, dir.getStepY() * 0.5D, dir.getStepZ() * 0.5D),
                 dir, pos, false);
         InteractionResult result = blockItem.place(
-                new BlockPlaceContext(maid.level(), null, InteractionHand.MAIN_HAND, stack, hit));
+                new BlockPlaceContext(actor, InteractionHand.MAIN_HAND, stack, hit));
         boolean ok = result.consumesAction();
         MaidDebug.log("placeBlock " + pos + " " + stack.getItem().getDescriptionId() + " -> " + ok);
         return ok;
     }
 
-    /** 右键使用手持物品于目标格（播种/火把/骨粉等；null-player 方案） */
+    /**
+     * 右键使用手持物品于目标格（播种/火把/骨粉等）。
+     *
+     * <p><b>2026-09-29 改造</b>：同 {@link #placeBlock} —— 用主人的 FakePlayer 代替 null 玩家。
+     * 这里走 {@code stack.useOn(ctx)}：直接用女仆手上的 stack，actor 的手持已在
+     * {@link MaidActor#actorFor} 里同步，所以 mod 内部读 {@code player.getItemInHand()}
+     * 也能拿到同一个物品。</p>
+     */
     public static boolean useItemOn(SmartMaidEntity maid, BlockPos pos, Direction dir) {
         ItemStack stack = maid.getMainHandItem();
         if (stack.isEmpty()) {
+            return false;
+        }
+        ServerPlayer actor = MaidActor.actorFor(maid);
+        if (actor == null) {
             return false;
         }
         BlockHitResult hit = new BlockHitResult(
                 Vec3.atCenterOf(pos).add(dir.getStepX() * 0.5D, dir.getStepY() * 0.5D, dir.getStepZ() * 0.5D),
                 dir, pos, false);
         InteractionResult result = stack.useOn(
-                new UseOnContext(maid.level(), null, InteractionHand.MAIN_HAND, stack, hit));
+                new UseOnContext(actor, InteractionHand.MAIN_HAND, hit));
         boolean ok = result.consumesAction();
         MaidDebug.log("useItemOn " + pos + " " + stack.getItem().getDescriptionId() + " -> " + ok);
         return ok;

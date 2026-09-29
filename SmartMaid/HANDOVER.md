@@ -18,7 +18,52 @@
 
 > ⚠️ 曾尝试"玩家式移动改造"（自写 A\* + 手动 velocity + 覆盖 travel），多轮失败后回退到原版体系。**坑与教训见 `DEVELOPMENT_ISSUES.md`，务必先读。**
 
-## 二、当前进度（最近更新：2026-09-21）
+## 二、当前进度（最近更新：2026-09-29）
+
+### 已完成（2026-09-29：整合包兼容改造 T1–T9 + 采集/背包修正，真机验收通过 ✅）
+
+> 目标：让模组能被整合包收录、并在整合包里开箱可用；同时修掉采集（砍树/挖矿）的目标选定问题。
+> 详细实现见 `docs/IMPL_MODPACK_COMPAT.md`；冲突分析见 `docs/MOD_COMPATIBILITY_ANALYSIS.md`；
+> 收录调研见 `docs/MODPACK_COMPATIBILITY.md`；采集问题全过程见 `docs/ISSUES_TREE_AND_INVENTORY.md`。
+
+**A. 整合包兼容（T1–T9，AutoTest 真机 PASS=17 / FAIL=0）**
+
+| 项 | 落地 |
+|---|---|
+| 命令权限 | 按注册环境自动降级：单人（INTEGRATED）用 `LEVEL_ALL`、专用服务器保持 `LEVEL_GAMEMASTERS`；`main.json` 可覆盖 —— 整合包玩家不开作弊也能 `/summonmaid` |
+| 桌宠桥接 | 默认关闭；专用服务器启动时跳过（判 `server.isDedicatedServer()`，**不能用 `getEnvironmentType()`** —— 单人也是客户端进程） |
+| 搭路建材 | 黑名单 → 白名单 tag `#smartmaid:bridge_blocks`（tag 为空时回退旧行为，防数据包出事就不能搭路）；09-29 补 `#minecraft:logs` |
+| 战斗排除 | `#smartmaid:never_target`（默认末影人 / 僵尸猪灵）+ config 追加 |
+| 合成白名单 | `craftWhitelistMode` = off / vanilla-only / tag（`#smartmaid:craftable`） |
+| 破坏流程 | 补齐 `PlayerBlockBreakEvents.BEFORE/AFTER` + `Block.playerWillDestroy`（用返回值）+ `destroyBlock(drop=false)`，掉落自行收进背包 |
+| 身份 | 新增 `MaidActor`：以**主人的 GameProfile** 取 Fabric `FakePlayer` → 领地/权限/统计按主人判定 |
+| 存档 | 女仆数据移到 `<存档>/smartmaid/maids/`（消除多存档串档）；旧文件首次读取时 `Files.copy` 迁移 |
+| 元数据 | `fabric.mod.json` 声明内嵌 PAL ≥1.2.6（版本不符**启动即报错**，而非运行时崩）、fabric-api 下限、contact |
+| 调试日志 | `main.json` 的 `debug` / `debugVerbose` **运行期**生效（改 json 不用重编译），启动日志回显开关状态 |
+
+**B. 采集与背包（真机验收：砍树达成 8/8）**
+
+- **目标判定分层（三轮定稿）**：连通性 = `core`（资源本身 —— "深色橡木也是树"）；`produce` 只在 `find`
+  阶段挑哪棵树 / 哪个矿簇，**不参与"哪些方块算目标"**；`find` 找不到产物匹配的结构时**退化返回最近的同类结构**
+- **起点容错**：脚本常是 `find → move → harvest`，move 用同一个坐标，而寻路降级直线会**把目标方块挖掉**
+  → seed 不是 core 时，半径 2 内找最近的 core 当起点
+- **不可达目标不再死磕**：`MaidBlockBreaker` 在"水平太远 / pillar 接近"两处检测
+  `MaidStraightNav.recentlyGaveUp` → 放弃该目标，交给上层重试/跳过（否则会无限重试同一个够不到的目标）
+- **满背包自动整理**：新增 `MaidInventoryTidy` —— 合并同类堆叠 + 丢弃 `#smartmaid:junk`
+  （树苗 / 腐肉 / 蘑菇 / 装饰石 / 杂草，丢在**身后一格** + 拾取冷却）；无垃圾可丢则上报
+  `inventory_full` 事件给 AI（含背包摘要）；开关 `main.json.autoTidyWhenFull`
+- **测试扩展**：`MaidAutoTest` 新增 `run`（造环境）/ `check`（block·inv·freeSlots·bridge·tag）/
+  `vetoNextBreak`（验证破坏事件链能被否决）/ `tidy` 四类条目；`tools/autotest.modpack-compat.json` 共 31 条
+- **工具**：`tools/probe_api.py` —— 26.2 API 签名核实（`--bytecode` 看内部调用、`--find` 搜改名后的类、
+  `--fabric` 展开嵌套模块）；**必须用 JDK 25 的 javap**
+
+**C. 上游（桌宠侧，另一仓库，非本仓库）**
+prompt 模板把产物写死 `#minecraft:oak_logs`，且 `prompt.txt`/`prompt2.txt` 的示例脚本带一步
+`move` 到 `$tree.pos`（会把目标树挖掉）→ 已改为 `#minecraft:logs` 并删除 move 步骤
+（5 个 prompt + `nlu/mod_contract.py`，备份 `*.bak_20260929-1106`）。
+
+**仍未人工验证**：命令权限（单人 vs 专用服务器实测）、FakePlayer 在第三方 mod 方块上的表现、
+内置 PAL 与视觉类 mod 共存。
 
 ### 已完成（2026-09-21：女仆挖掘能力对齐玩家 —— 挖挡路块 + 搭高采矿，真机验证通过 ✅）
 

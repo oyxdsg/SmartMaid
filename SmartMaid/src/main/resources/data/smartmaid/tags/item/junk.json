@@ -1,0 +1,19 @@
+{
+  "values": [
+    "#minecraft:saplings",
+    "minecraft:rotten_flesh",
+    "minecraft:brown_mushroom",
+    "minecraft:red_mushroom",
+    "minecraft:diorite",
+    "minecraft:andesite",
+    "minecraft:granite",
+    "minecraft:tuff",
+    "minecraft:short_grass",
+    "minecraft:tall_grass",
+    "minecraft:dead_bush",
+    {
+      "id": "#c:mushrooms",
+      "required": false
+    }
+  ]
+}

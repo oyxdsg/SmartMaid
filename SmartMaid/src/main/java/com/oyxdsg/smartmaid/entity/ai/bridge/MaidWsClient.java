@@ -102,6 +102,13 @@ public final class MaidWsClient {
     // ---------- 生命周期 ----------
 
     public static void onServerStarted(MinecraftServer srv) {
+        // 专用服务器上没有"本机桌宠"这回事：直接跳过，避免无意义的重连与目录写入。
+        // 判定必须用 isDedicatedServer() —— 单人游戏的集成服务器也跑在客户端进程里，
+        // 用 FabricLoader.getEnvironmentType() 会把单人一起关掉。
+        if (srv.isDedicatedServer()) {
+            SmartMaid.LOGGER.info("专用服务器：跳过桌宠联动（桥接仅对本机桌宠有意义）");
+            return;
+        }
         server = srv;
         synchronized (LOCK) {
             nextAttemptAt = 0;
