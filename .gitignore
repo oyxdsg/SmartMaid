@@ -39,3 +39,7 @@ SmartMaid/config/**/*.dat
 # ---- 本机路径覆盖（工具脚本用；含本机绝对路径，不入库）----
 SmartMaid/tools/local_paths.json
 **/local_paths.json
+
+# ---- 对外发布 / 宣传文案（运营材料，不是项目内容，不入库）----
+# 如 CurseForge 更新日志、MC 百科页面文案这类"写完粘到平台上"的稿子
+/release-notes/
