@@ -8,7 +8,9 @@
 
 **M5 双向链路 + 感知增量 diff + 一键 e2e 已通过真机端到端验证（2026-09-10）**——见 `HANDOVER.md` §二、§已知 bug 与 `DEVELOPMENT_ISSUES.md` 2026-09-10 节。
 
-**玩家绑定设置 + 木质女仆菜单 + 聊天栏对话 + 桌宠隐退已落地（2026-09-19）**——见 `HANDOVER.md` §2026-09-19 节。
+**玩家绑定设置 + 游戏内女仆菜单 + 聊天栏对话 + 桌宠隐退已落地（2026-09-19）**——见 `HANDOVER.md` §2026-09-19 节。
+
+**游戏内菜单 N1 + 任务队列已落地（v0.1.2，2026-10-01 真机验收）**——`Shift + 右键` 打开两级菜单（3D 预览 / 装备概览 / 生命饱食状态条 / 任务页 / 设置页）；女仆任务队列支持长期+短期双队列、优先级插队、打断只暂停不丢弃、进度接续、退出游戏重召后自动继续。变更记录见 [`CHANGELOG.md`](./CHANGELOG.md)。
 
 **战斗走位死区 + 盾牌免前摇 + 背包模型预览已落地（2026-09-19）**——近战死区 2.7~3.2；盾牌覆写 `getItemBlockingWith` 去掉 0.25s 架盾前摇（女仆=PVE 高手，检测到威胁即当场举盾 100% 挡箭）；女仆背包界面左上角渲染女仆自身缩小模型（跟随鼠标旋转）。
 
@@ -32,9 +34,13 @@ SmartMaid 是**桌面宠物 DeskPet 的 Minecraft 侧搭档**——女仆的 AI 
 
 ![女仆背包界面](docs/images/smartmaid-inventory-gui.png)
 
-**木质「女仆管理」面板**——交互/跟随距离、护卫模式、喂食与回血速度、死亡掉落等都在这里点按切换：
+**`Shift + 右键` 女仆菜单**——左侧 3D 预览 + 装备概览，右侧功能区入口，底部高频动作；生命 / 饱食走原版 HUD 贴图：
 
-![女仆管理面板](docs/images/smartmaid-settings-panel.png)
+![女仆菜单](docs/images/smartmaid-menu-main.png)
+
+**任务队列页**——长期 / 短期两条独立队列，短期清空后才执行长期；可添加、上移、整组停止、一键清空：
+
+![任务队列页](docs/images/smartmaid-menu-tasks.png)
 
 **聊天栏对话**：让女仆去砍木头，她先回你一句，然后真的背着镐去了（AI 对话由桌宠程序联动提供）：
 
@@ -81,7 +87,7 @@ SmartMaid 是**桌面宠物 DeskPet 的 Minecraft 侧搭档**——女仆的 AI 
   - **够不着的高处矿** → **pillar 搭方块上去挖**：起跳后脚底离开原格（y>+1.0，原格空出、无实体碰撞）时放方块到脚下，落地站上高度+1 循环；**放块失败自动重试**（连续 8 次才放弃）、搭高期间逐 tick 锁定水平（防掉下 1 格宽柱子）、落地判定用高度；只耗普通建材
   - 日志：`Breaker 挖挡路块 / pillar 起跳·垫·上一层`
 - **pillar 垫高（`MaidStraightNav` 垂直同柱，寻路降级到达位置用）**：目标在正上方且跳不上时，起跳后在脚下放方块（离线解表 `tools/maid_jump_sim.js`「pillar 垫高」段），落地站上新方块 → 高度 +1 循环直到可跳；只耗普通建材、`setWait()` 停水平移动、60t 超时保护
-- **玩家绑定设置 + 游戏内女仆菜单（2026-09-19）**：Shift+右键 打开木质风设置菜单（全部原版控件 + 自绘暖棕木纹贴图）；设置与玩家 UUID 绑定持久化（`config/smartmaid/settings/<玩家UUID>.json`），改完即时生效、菜单 ContainerData 实时回显：
+- **玩家绑定设置 + 游戏内女仆菜单（2026-09-19 · 菜单 2026-10-01 改版为两级）**：`Shift + 右键` 打开两级菜单，视觉全自绘（无贴图依赖）；设置与玩家 UUID 绑定持久化（`config/smartmaid/settings/<玩家UUID>.json`），改完即时生效：
   - **友军伤害**（开启后女仆可伤害玩家，友军=玩家自己）
   - **自动跟随** 开关 + 触发/停止距离
   - **护主模式**：主动（遇怪就上）/ 被动（只反击打主人的怪）/ 关闭
@@ -167,10 +173,28 @@ gradlew.bat build
 
 执行后完整 JSON 写入 `logs/latest.log`（`[SmartMaid-Debug] 手动感知快照:`），聊天栏回显摘要。区块：`self` / `inventory` / `owner` / `nearby` / `blocks` / `env` / `events`。
 
-### 游戏内女仆菜单（Shift+右键）
+### 游戏内女仆菜单（Shift + 右键）
 
-木质风设置菜单（自绘暖棕木纹贴图 + 原版控件），设置与玩家绑定、改完即时生效：
-**友军伤害** / **自动跟随**（开关 + 触发/停止距离）/ **护主模式**（主动·被动·关闭）/ **最大生命** / **饱食消耗速度** / **回血速度** / **死亡掉落**（全部·保留装备·不掉落）。底部含「坐下/站起」「召回」。每点一次 `logs/latest.log` 记录 `[SmartMaid-Debug] 设置更新 <字段>=<值>`。
+**一级菜单**：左侧 3D 女仆预览（跟随鼠标旋转）+ 装备概览（4 件盔甲 / 主手 / 副手）；右侧 5 个入口（任务 / 背包 / 对话 / 设置 / 动作）；下方原版 HUD 的生命与饱食条；底部高频动作「跟随我 / 坐下待命 / 召回 / 停止当前」。菜单是纯客户端 `Screen`，状态经 S2C 包实时刷新，每次操作都有回执提示。
+
+**二级页**：
+
+- **任务**：队列页，见下方「任务队列」
+- **设置**（8 项）：**友军伤害** / **自动跟随**（开关 + 触发/停止距离）/ **护主模式**（主动·被动·关闭）/ **最大生命** / **饱食消耗速度** / **回血速度** / **死亡掉落**（全部·保留装备·不掉落），点一下即改并回执
+- **背包**：直接跳转原有女仆背包界面（**背包本身无任何改动**）
+- **对话 / 动作**：占位页，后续接入
+
+### 任务队列
+
+女仆不再"做一件忘一件"——任务进队列按序执行：
+
+- **双队列**：长期任务 / 短期任务两条独立队列，**短期清空后才执行长期**
+- **优先级**：主人实时指令**插队首**（当前任务暂停让位，不丢弃）；桌宠自动识别的指令**追加队尾**
+- **打断不丢活**：战斗 / 坐下 / 任务被抢占 → 任务进入 `PAUSED` 并降一位，忙完自动接着做
+- **进度接续**：`Mine` / `Farm` / `Build` / `Smelt` / `Harvest` 支持从中断处继续（`Resumable` 契约，参数级落盘 + 状态回溯）
+- **去重互斥**：`mutexKey` = 动作 + 具体子目（烧铁矿 ≠ 烧金矿），同一件事不重复下发；一条命令展开的多项用 `groupId` 折叠显示、可整组停止
+- **熔炉租约**：烧炼自动占用空闲熔炉，一炉同时只烧一种矿
+- **持久化**：队列存进存档 NBT，退出游戏后重新召唤**自动继续**
 
 ### 聊天栏对话 + 桌宠隐退
 
@@ -218,8 +242,14 @@ SmartMaid (Fabric 26.2)
 │       ├── maidtask/              ★AI 任务系统
 │       │   ├── MaidAITask         任务抽象
 │       │   ├── MaidTaskManager    调度器（aiBusy 接管行为；战斗期取消任务）
+│       │   ├── MaidTaskQueue     ★双队列调度（长期/短期 + 优先级插队）
+│       │   ├── QueuedTask        队列项（状态机 / 优先级 / groupId）
+│       │   ├── TaskMutex         ★去重互斥（mutexKey / 三态判定 / 60t 时间窗）
+│       │   ├── TaskState         任务状态枚举
+│       │   ├── Resumable         ★接续契约（saveState / restoreState / validateState）
+│       │   ├── FurnaceLease      熔炉租约（一炉一矿）
 │       │   └── Attack/Guard/Feed/Eat/Mine/Farm/Build/Collect/Craft/Smelt/
-│       │       MoveTo/Transfer/ChestOpen/OneShot Task
+│       │       MoveTo/Transfer/ChestOpen/ChestStore/OneShot Task
 │       ├── combat/                ★女仆战斗系统（C0–C5，2026-09-17）
 │       │   ├── MaidCombatGoal     战斗状态机（盾>吃>远程>近战；战斗高于任务）
 │       │   ├── MaidCombatMovement 走位：面向敌人后退 / 侧移绕行 / 背对跳
@@ -242,15 +272,21 @@ SmartMaid (Fabric 26.2)
 │           └── ItemIndexPayload.java      ★M6-b 物品索引下发（当前语言名→id，NLU 用）
 ├── data/MaidDataManager   本地数据持久化（NBT 文件）
 ├── data/MaidSettings      ★玩家绑定设置（JSON：友军/跟随/护主/属性/掉落，config/smartmaid/settings/<玩家UUID>.json）
-├── gui/                   女仆背包/管理菜单（服务端 Menu + ContainerData 状态同步）
-├── network/               GUI 动作 + 设置 + 对话网络包（MaidSettingsPayload / MaidChatPayload）
+├── gui/                   女仆背包菜单（服务端 Menu + ContainerData 状态同步）
+├── network/               GUI 动作 + 设置 + 对话 + 菜单网络包（MaidSettingsPayload / MaidChatPayload / MaidOpenMenuPayload / MaidMenuStatePayload / MaidMenuActionPayload）
 ├── client/
-│   ├── gui/MaidControlScreen  ★木质风设置菜单（自绘暖棕木纹贴图 + 原版控件）
-│   ├── gui/WoodButton         木质九宫格按钮（宽/窄两态，悬停变亮）
+│   ├── gui/MaidMenuScreen     ★两级主菜单（Shift+右键：3D 预览/装备概览/状态条/入口/动作）
+│   ├── gui/MaidSubScreen      二级页基类（返回栏 + 标题）
+│   ├── gui/MaidTaskScreen     ★任务队列页（双队列前端：增删 / 上移 / 整组停止）
+│   ├── gui/MaidAddTaskScreen  添加任务页（参数 stepper + 坐标「准星 / 女仆脚下」）
+│   ├── gui/MaidSettingsScreen 设置页（8 项）
+│   ├── gui/MaidTheme          菜单配色令牌（自绘，无贴图）
+│   ├── gui/MaidControlScreen  旧设置菜单（类保留，不再是入口）
+│   ├── gui/WoodButton         旧木质按钮（仅供 MaidControlScreen）
 │   ├── chat/MaidChatClient    ★客户端「女仆对话模式」状态（/maidchat 开关）
 │   ├── renderer/          渲染（玩家模型 + 女仆皮肤 + 坐姿/手持 + 多行气泡）
 │   └── animation/MaidAnimManager  ★动作动画：加载 Emotecraft JSON → PAL 控制器 → 骨骼写入模型
-└── resources              皮肤贴图、木质 GUI 贴图（textures/gui/maid_*.png）、Emotecraft 动作 JSON、fabric.mod.json
+└── resources              皮肤贴图、菜单贴图（textures/gui/，仅旧 MaidControlScreen 使用）、Emotecraft 动作 JSON、fabric.mod.json
 libs/                     ★本地依赖（Player Animation Library + mocha，jar-in-jar 打包）
 tools/
 ├── maid_monitor.ps1       资源/日志监测脚本
@@ -317,7 +353,8 @@ python tools/run_e2e_test.py --quick-play "新的世界 (11)"
 - [x] **`owner.pos` 感知补全（M6-c：相对指令「在我脚下…」可换算）**
 - [x] **寻路降级（挖方块 + 搭路，2026-09-15 真机验收）**：原版寻路失败/绕远 → 直线物理路径 + 破坏/搭方块，动态切回
 - [x] **女仆战斗系统（C0–C5，2026-09-17）**：近战 3.2 / 走位（后退·绕行·背对跳）/ 远程弓箭 / 盾牌格挡 / 饱食度+进食回血 / 免伤玩家 / 敌对排除表；桌宠侧新增 `eat` 指令并重训 NLU
-- [x] **玩家绑定设置 + 木质女仆菜单 + 聊天栏对话 + 桌宠隐退（2026-09-19）**：设置与玩家 UUID 绑定持久化、改完即时生效；菜单自绘暖棕木纹贴图（原版控件）；`/maidchat` 聊天栏对话（多行气泡回复 + 语音朗读）；召唤时通知桌宠隐退（开关在桌宠设置，AI/语音后端保留）
+- [x] **玩家绑定设置 + 游戏内女仆菜单 + 聊天栏对话 + 桌宠隐退（2026-09-19）**：设置与玩家 UUID 绑定持久化、改完即时生效；`/maidchat` 聊天栏对话（多行气泡回复 + 语音朗读）；召唤时通知桌宠隐退（开关在桌宠设置，AI/语音后端保留）
+- [x] **游戏内菜单 N1 + 任务队列（v0.1.2，2026-10-01 真机验收）**：`Shift+右键` 两级菜单（3D 预览 + 装备概览 + 原版 HUD 状态条 + 任务/设置/背包入口 + 4 动作）；任务队列双队列调度、优先级插队、战斗暂停回队首、去重互斥（`mutexKey` / 三态 / 60t 窗口 / `groupId` / guard 合并）、熔炉租约、`Resumable` 接续（Mine/Farm/Build/Smelt/Harvest）、NBT 持久化 + 重召自动继续；真机 AutoTest PASS=30 / FAIL=0，离线 JUnit 33 项全绿
 - [ ] 战斗系统真机回归收尾（全流程：近战/走位/背对跳/远程/盾/进食/任务抢占）
 - [ ] 鱼竿攻击（spike 结论：`FishingHook` 非玩家 owner 首 tick 丢弃，原版不可用；暂不做）
 - [ ] 跳跃系统完整实测标定（对角跨沟、跨 3 沟上 1 格等）— P3
@@ -353,7 +390,7 @@ python tools/run_e2e_test.py --quick-play "新的世界 (11)"
 
 | 内容 | 许可 |
 |---|---|
-| 本项目原创代码（Java 源码、构建脚本、文档、木质 GUI 贴图） | **MIT**（见仓库根 [`LICENSE`](../LICENSE)） |
+| 本项目原创代码（Java 源码、构建脚本、文档、界面贴图） | **MIT**（见仓库根 [`LICENSE`](../LICENSE)） |
 | `entity/ai/MaidMoveControl.java` 的"触发跳跃"判断条件 | 改编自 [Touhou Little Maid](https://github.com/TartaricAcid/TouhouLittleMaid)（代码部分 MIT，Copyright © 2019-2025 tartaric_acid），文件头已保留其版权声明 |
 | `assets/smartmaid/emotes/*.json`（11 个表情动画） | 来自 [Emotecraft](https://github.com/KosmX/emotes)（KosmX）内置表情的未修改副本，**GPL-3.0** |
 | 女仆皮肤图片（`textures/entity/smart_maid.png`、仓库根 `皮肤大肥鱼.png`）与模组图标（`assets/smartmaid/icon.png`） | 基于"大肥鱼"角色立绘制作，**CC BY-NC-SA 4.0**（须署名 / **禁止商用** / 衍生须相同方式共享） |

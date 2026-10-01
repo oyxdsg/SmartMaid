@@ -45,7 +45,7 @@ gradlew.bat build
 
 | 内容 | 许可 |
 |---|---|
-| 本项目原创代码 / 文档 / 木质 GUI 贴图 | **MIT**（[`LICENSE`](LICENSE)） |
+| 本项目原创代码 / 文档 / 界面贴图 | **MIT**（[`LICENSE`](LICENSE)） |
 | `assets/smartmaid/emotes/*.json`（11 个表情动画） | 来自 [Emotecraft](https://github.com/KosmX/emotes)（KosmX），**GPL-3.0** |
 | 女仆皮肤（`皮肤大肥鱼.png` 等） | 基于"大肥鱼"角色立绘，**CC BY-NC-SA 4.0**（署名 / 禁商用 / 相同方式共享） |
 
