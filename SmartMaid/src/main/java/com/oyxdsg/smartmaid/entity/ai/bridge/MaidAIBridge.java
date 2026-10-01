@@ -11,6 +11,7 @@ import com.oyxdsg.smartmaid.entity.ai.craft.CraftExecutor;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.AttackTask;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.BuildTask;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.ChestOpenTask;
+import com.oyxdsg.smartmaid.entity.ai.maidtask.ChestStoreTask;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.CollectTask;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.CraftTask;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.EatTask;
@@ -19,7 +20,10 @@ import com.oyxdsg.smartmaid.entity.ai.maidtask.FeedTask;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.GuardTask;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.MaidAITask;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.MaidTaskManager;
+import com.oyxdsg.smartmaid.entity.ai.maidtask.MaidTaskNames;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.MineTask;
+import com.oyxdsg.smartmaid.entity.ai.maidtask.QueuedTask;
+import com.oyxdsg.smartmaid.entity.ai.maidtask.QueuedTask.QueueKind;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.MoveToTask;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.OneShotTask;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.SmeltTask;
@@ -98,7 +102,18 @@ public final class MaidAIBridge {
                 JsonObject result = new JsonObject();
                 result.addProperty("task", current == null ? null : current.taskId());
                 result.addProperty("ai_busy", manager.isAiBusy());
+                // Q2 向后兼容扩展：追加队列规模（旧调用方忽略新字段即可）
+                result.addProperty("short_size", manager.queue().shortSize());
+                result.addProperty("long_size", manager.queue().longSize());
+                // Q9 向后兼容扩展：追加队列明细（旧调用方忽略新字段即可）
+                JsonObject snap = manager.snapshot();
+                result.add("short", snap.get("short"));
+                result.add("long", snap.get("long"));
                 return MaidCommandResult.ok(id, "done", "queried", result);
+            }
+            case "queue" -> {
+                // 队列操作（Q4；DESIGN_MAID_TASK_QUEUE §十）：promote/stop/move/remove/clear/resume/...
+                return handleQueue(manager, id, params);
             }
             case "craft_check" -> {
                 // 干跑查询（不消耗材料）：供桌宠在自动合成前判断材料是否齐备、
@@ -118,6 +133,21 @@ public final class MaidAIBridge {
                 if (!params.has("steps") || !params.get("steps").isJsonArray()
                         || params.getAsJsonArray("steps").size() == 0) {
                     return MaidCommandResult.fail(id, "script 缺少非空 steps 数组");
+                }
+                // script 也可入队（Q9）：queue:true 时与普通任务同样处理（script 不参与 mutex 互斥）
+                if (req.has("queue") && req.get("queue").getAsBoolean()) {
+                    QueueKind kind = req.has("long_term") && req.get("long_term").getAsBoolean()
+                            ? QueueKind.LONG : QueueKind.SHORT;
+                    boolean owner = req.has("priority") && "owner".equals(req.get("priority").getAsString());
+                    int priority = owner ? MaidTaskManager.PRIORITY_OWNER : MaidTaskManager.PRIORITY_DEFAULT;
+                    String groupId = req.has("group") && !req.get("group").isJsonNull()
+                            ? req.get("group").getAsString() : null;
+                    String parentLabel = req.has("group_label") && !req.get("group_label").isJsonNull()
+                            ? req.get("group_label").getAsString() : null;
+                    MaidTaskManager.EnqueueResult er = manager.enqueueTask(new ScriptTask(id, params),
+                            id, "script", params, kind, owner, MaidTaskNames.display("script", params),
+                            groupId, parentLabel, priority);
+                    return enqueueReceipt(id, kind, er);
                 }
                 if (!cancelPrevious && manager.isAiBusy()) {
                     return MaidCommandResult.fail(id, "女仆已有任务运行中（cancel_previous=false）");
@@ -141,6 +171,21 @@ public final class MaidAIBridge {
         if (task == null) {
             return MaidCommandResult.fail(id, err.length() > 0 ? err.toString() : "未知指令: " + cmd);
         }
+        // 队列扩展（Q2）：仅显式 queue:true 才入队；缺省仍是即时抢占，语义不变（§三 兼容铁律）。
+        if (req.has("queue") && req.get("queue").getAsBoolean()) {
+            QueueKind kind = req.has("long_term") && req.get("long_term").getAsBoolean()
+                    ? QueueKind.LONG : QueueKind.SHORT;
+            boolean owner = req.has("priority") && "owner".equals(req.get("priority").getAsString());
+            int priority = owner ? MaidTaskManager.PRIORITY_OWNER : MaidTaskManager.PRIORITY_DEFAULT;
+            String groupId = req.has("group") && !req.get("group").isJsonNull()
+                    ? req.get("group").getAsString() : null;
+            String parentLabel = req.has("group_label") && !req.get("group_label").isJsonNull()
+                    ? req.get("group_label").getAsString() : null;
+            MaidTaskManager.EnqueueResult er = manager.enqueueTask(
+                    task, id, cmd, params, kind, owner, MaidTaskNames.display(cmd, params),
+                    groupId, parentLabel, priority);
+            return enqueueReceipt(id, kind, er);
+        }
         if (!cancelPrevious && manager.isAiBusy()) {
             return MaidCommandResult.fail(id, "女仆已有任务运行中（cancel_previous=false）");
         }
@@ -155,6 +200,129 @@ public final class MaidAIBridge {
         result.addProperty("task", task.taskId());
         result.addProperty("note", "任务已下发");
         return MaidCommandResult.ok(id, "running", "accepted", result);
+    }
+
+    /** 入队判定结果 → 协议回执（§8.7：拒绝/重复/满/合并/软提示都要可观测）。 */
+    private static MaidCommandResult enqueueReceipt(String id, QueueKind kind,
+                                                    MaidTaskManager.EnqueueResult er) {
+        if (!er.ok) {
+            JsonObject fail = new JsonObject();
+            fail.addProperty("reason", er.reason);
+            if (er.existingId != null) {
+                fail.addProperty("existing_id", er.existingId);
+            }
+            if (er.note != null) {
+                fail.addProperty("note", er.note);
+            }
+            return new MaidCommandResult(id, false, "failed", "rejected", fail);
+        }
+        JsonObject ok = new JsonObject();
+        ok.addProperty("id", er.existingId);
+        ok.addProperty("queue", kind.name());
+        if (er.merged) {
+            ok.addProperty("merged", true);
+        } else {
+            ok.addProperty("queued", true);
+            if (!er.overlap.isEmpty()) {
+                JsonArray arr = new JsonArray();
+                er.overlap.forEach(arr::add);
+                ok.add("possible_overlap", arr);
+            }
+        }
+        if (er.note != null) {
+            ok.addProperty("note", er.note);
+        }
+        return MaidCommandResult.ok(id, "queued", er.merged ? "merged" : "enqueued", ok);
+    }
+
+    // ---------- 队列操作（Q4） ----------
+
+    /**
+     * 队列操作命令：{@code {"cmd":"queue","params":{"op":"promote","id":"L1"}}}。
+     * op = query / cancelCurrent / promote / stop / remove / moveUp / move / clear / resume。
+     */
+    private static MaidCommandResult handleQueue(MaidTaskManager manager, String id, JsonObject params) {
+        String op = params.has("op") ? params.get("op").getAsString() : "query";
+        JsonObject result = new JsonObject();
+        switch (op) {
+            case "query" -> {
+                return MaidCommandResult.ok(id, "done", "queried", manager.snapshot());
+            }
+            case "cancelCurrent" -> {
+                boolean had = manager.queue().hasCurrent();
+                manager.cancel();
+                result.addProperty("cancelled", had);
+                return MaidCommandResult.ok(id, "done", "cancelCurrent", result);
+            }
+            case "pauseCurrent" -> {
+                boolean ok = manager.pauseCurrent();
+                return ok ? MaidCommandResult.ok(id, "done", "pauseCurrent", result)
+                        : MaidCommandResult.fail(id, "没有正在执行的任务");
+            }
+            case "setLongTerm" -> {
+                boolean lt = params.has("long_term") && params.get("long_term").getAsBoolean();
+                boolean ok = manager.setLongTerm(strParam(params, "id"), lt);
+                return ok ? MaidCommandResult.ok(id, "done", "setLongTerm", result)
+                        : MaidCommandResult.fail(id, "无法调整（未找到或目标队列满）: " + strParam(params, "id"));
+            }
+            case "stopGroup" -> {
+                int removed = manager.stopGroup(strParam(params, "group"));
+                result.addProperty("removed", removed);
+                return MaidCommandResult.ok(id, "done", "stopGroup", result);
+            }
+            case "promote" -> {
+                // 长期项「设为当前」：可打断短期（当前项 PAUSED 降位保留）
+                QueuedTask t = manager.queue().promote(strParam(params, "id"));
+                if (t == null) {
+                    return MaidCommandResult.fail(id, "未找到长期任务: " + strParam(params, "id"));
+                }
+                result.addProperty("promoted", t.id());
+                return MaidCommandResult.ok(id, "done", "promote", result);
+            }
+            case "stop" -> {
+                // 长期「停止」= 永久移除（含正在执行的那一项）
+                boolean ok = manager.stopTask(strParam(params, "id"));
+                return ok ? MaidCommandResult.ok(id, "done", "stop", result)
+                        : MaidCommandResult.fail(id, "未找到任务: " + strParam(params, "id"));
+            }
+            case "remove" -> {
+                boolean ok = manager.queue().remove(queueKind(params), strParam(params, "id"));
+                return ok ? MaidCommandResult.ok(id, "done", "remove", result)
+                        : MaidCommandResult.fail(id, "未找到任务: " + strParam(params, "id"));
+            }
+            case "moveUp" -> {
+                boolean ok = manager.queue().moveUp(queueKind(params), strParam(params, "id"));
+                return ok ? MaidCommandResult.ok(id, "done", "moveUp", result)
+                        : MaidCommandResult.fail(id, "无法上移: " + strParam(params, "id"));
+            }
+            case "move" -> {
+                int to = intParam(params, "to", 0);
+                boolean ok = manager.queue().move(queueKind(params), strParam(params, "id"), to);
+                return ok ? MaidCommandResult.ok(id, "done", "move", result)
+                        : MaidCommandResult.fail(id, "无法移动: " + strParam(params, "id"));
+            }
+            case "clear" -> {
+                manager.queue().clear(queueKind(params));
+                return MaidCommandResult.ok(id, "done", "clear", result);
+            }
+            case "resume" -> {
+                boolean ok = manager.queue().resume(strParam(params, "id"));
+                return ok ? MaidCommandResult.ok(id, "done", "resume", result)
+                        : MaidCommandResult.fail(id, "未找到暂停项: " + strParam(params, "id"));
+            }
+            default -> {
+                return MaidCommandResult.fail(id, "未知队列操作: " + op);
+            }
+        }
+    }
+
+    private static String strParam(JsonObject params, String key) {
+        return params.has(key) && !params.get(key).isJsonNull() ? params.get(key).getAsString() : "";
+    }
+
+    /** 队列类型参数 kind（默认 SHORT）。 */
+    private static QueueKind queueKind(JsonObject params) {
+        return "LONG".equalsIgnoreCase(strParam(params, "kind")) ? QueueKind.LONG : QueueKind.SHORT;
     }
 
     // ---------- 指令 → 任务构造 ----------
@@ -213,6 +381,14 @@ public final class MaidAIBridge {
             }
             case "chestput" -> chestPutTask(maid, params, err);
             case "chesttake" -> chestTakeTask(maid, params, err);
+            case "cheststore" -> {
+                // 存箱打包成一个原子队列项（开箱 → 放入）
+                BlockPos pos = parsePos(maid, params, "pos", err);
+                if (pos == null) {
+                    yield null;
+                }
+                yield new ChestStoreTask(pos, intParam(params, "count", 64));
+            }
             case "move" -> {
                 BlockPos pos = parsePos(maid, params, "pos", err);
                 if (pos == null) {

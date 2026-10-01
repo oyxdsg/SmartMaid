@@ -397,6 +397,9 @@ public final class MaidAutoTest {
             if (check.has("tag")) {
                 return checkTag(check.getAsJsonObject("tag"));
             }
+            if (check.has("freeSlots")) {
+                return checkFreeSlots(maid, check.getAsJsonObject("freeSlots"));
+            }
         } catch (Exception e) {
             SmartMaid.LOGGER.info("AutoTest check 异常: " + e);
             return false;

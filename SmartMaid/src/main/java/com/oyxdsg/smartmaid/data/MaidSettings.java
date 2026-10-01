@@ -2,6 +2,7 @@ package com.oyxdsg.smartmaid.data;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import com.oyxdsg.smartmaid.SmartMaid;
 import com.oyxdsg.smartmaid.entity.SmartMaidEntity;
 import net.fabricmc.loader.api.FabricLoader;
@@ -120,6 +121,21 @@ public final class MaidSettings {
         maid.getMaidFood().setRates(
                 RATE_STEPS[clampIndex(this.hungerRateIndex, RATE_STEPS.length)],
                 RATE_STEPS[clampIndex(this.regenRateIndex, RATE_STEPS.length)]);
+    }
+
+    /** 导出为「字段 → 档位索引」JSON（供菜单状态快照 S2C 展示）。 */
+    public JsonObject toJson() {
+        JsonObject o = new JsonObject();
+        o.addProperty("friendlyFire", this.friendlyFire ? 1 : 0);
+        o.addProperty("followEnabled", this.followEnabled ? 1 : 0);
+        o.addProperty("followStart", this.followStartIndex);
+        o.addProperty("followStop", this.followStopIndex);
+        o.addProperty("protectMode", this.protectMode.ordinal());
+        o.addProperty("deathDrop", this.deathDropMode.ordinal());
+        o.addProperty("maxHealth", this.maxHealthIndex);
+        o.addProperty("hungerRate", this.hungerRateIndex);
+        o.addProperty("regenRate", this.regenRateIndex);
+        return o;
     }
 
     /** 读取玩家设置（带缓存；不存在则返回默认设置）。 */

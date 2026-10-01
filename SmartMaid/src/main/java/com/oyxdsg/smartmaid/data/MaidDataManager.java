@@ -3,6 +3,7 @@ package com.oyxdsg.smartmaid.data;
 import com.mojang.serialization.DataResult;
 import com.oyxdsg.smartmaid.SmartMaid;
 import com.oyxdsg.smartmaid.entity.SmartMaidEntity;
+import com.oyxdsg.smartmaid.entity.ai.bridge.MaidAIBridge;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -83,6 +84,10 @@ public final class MaidDataManager {
                 invList.add(slotTag);
             }
             tag.put("inventory", invList);
+            // 任务队列（Q8）：与背包同文件、同节奏保存（两个队列 + 正在执行的项 + progress）
+            CompoundTag tasksTag = new CompoundTag();
+            maid.getMaidTaskManager().saveToTag(tasksTag);
+            tag.put("tasks", tasksTag);
             Path file = fileFor(maid, owner);
             Files.createDirectories(file.getParent());
             NbtIo.writeCompressed(tag, file);
@@ -148,6 +153,15 @@ public final class MaidDataManager {
                 }
                 if (idx >= 0) {
                     maid.getMaidInventory().setItem(idx, stack);
+                }
+            }
+            // 任务队列（Q8）：重召自动继续（旧存档无 tasks 段 → 视为空队列）
+            CompoundTag tasksTag = tag.getCompoundOrEmpty("tasks");
+            if (!tasksTag.isEmpty()) {
+                int restored = maid.getMaidTaskManager().loadFromTag(tasksTag,
+                        (m, cmd, params, err) -> MaidAIBridge.buildTask(m, cmd, params, err));
+                if (restored > 0) {
+                    SmartMaid.LOGGER.info("女仆任务队列已恢复 {} 项（自动继续）", restored);
                 }
             }
         } catch (IOException e) {

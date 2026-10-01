@@ -1,0 +1,170 @@
+[
+  {
+    "__comment": "Q4(修正)/Q5/Q6c 真机验证 v2：队列操作用 eat 子目区分；Q5 先 difficulty normal 再召僵尸；Q6c 单熔炉两 smelt 抢租约"
+  },
+  {
+    "id": "b0",
+    "cmd": "status",
+    "expect": { "ok": true, "result.short_size": 0, "result.long_size": 0 }
+  },
+  {
+    "__comment": "Q4-a：guard 占 current，入队 3 个 eat（子目不同），验证 query/moveUp/remove/clear/cancelCurrent"
+  },
+  {
+    "id": "h1",
+    "cmd": "guard",
+    "params": { "range": 8 },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  {
+    "id": "e1",
+    "cmd": "eat",
+    "params": { "item": "minecraft:apple" },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  {
+    "id": "e2",
+    "cmd": "eat",
+    "params": { "item": "minecraft:bread" },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  {
+    "id": "e3",
+    "cmd": "eat",
+    "params": { "item": "minecraft:carrot" },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  {
+    "id": "qp",
+    "cmd": "queue",
+    "params": { "op": "query" },
+    "expect": { "ok": true, "result.current.cmd": "guard", "result.short_size": 3 }
+  },
+  {
+    "id": "qmu",
+    "cmd": "queue",
+    "params": { "op": "moveUp", "id": "e3" },
+    "expect": { "ok": true }
+  },
+  {
+    "id": "qrm",
+    "cmd": "queue",
+    "params": { "op": "remove", "id": "e2", "kind": "SHORT" },
+    "expect": { "ok": true }
+  },
+  {
+    "id": "qp2",
+    "cmd": "queue",
+    "params": { "op": "query" },
+    "expect": { "ok": true, "result.short_size": 2 }
+  },
+  {
+    "id": "qcl",
+    "cmd": "queue",
+    "params": { "op": "clear", "kind": "SHORT" },
+    "expect": { "ok": true }
+  },
+  {
+    "id": "qp3",
+    "cmd": "queue",
+    "params": { "op": "query" },
+    "expect": { "ok": true, "result.short_size": 0, "result.current.cmd": "guard" }
+  },
+  {
+    "id": "qcc",
+    "cmd": "queue",
+    "params": { "op": "cancelCurrent" },
+    "expect": { "ok": true }
+  },
+  {
+    "__comment": "填充分隔"
+  },
+  { "id": "f1", "cmd": "status" },
+  { "id": "f2", "cmd": "status" },
+  { "id": "f3", "cmd": "status" },
+  { "id": "f4", "cmd": "status" },
+  { "id": "f5", "cmd": "status" },
+  { "id": "f6", "cmd": "status" },
+  { "id": "f7", "cmd": "status" },
+  {
+    "__comment": "Q5：挂长期 guard → 普通难度 → 召僵尸 → 应看到 任务暂停(COMBAT)/任务恢复"
+  },
+  {
+    "id": "ch",
+    "cmd": "guard",
+    "params": { "range": 12 },
+    "queue": true,
+    "long_term": true,
+    "expect": { "ok": true }
+  },
+  { "id": "diff", "run": "difficulty normal" },
+  { "id": "cz", "run": "summon minecraft:zombie {x+4} {y} {z}" },
+  { "id": "w1", "cmd": "status" },
+  { "id": "w2", "cmd": "status" },
+  { "id": "w3", "cmd": "status" },
+  { "id": "w4", "cmd": "status" },
+  { "id": "w5", "cmd": "status" },
+  { "id": "w6", "cmd": "status" },
+  { "id": "w7", "cmd": "status" },
+  { "id": "w8", "cmd": "status" },
+  { "id": "w9", "cmd": "status" },
+  { "id": "w10", "cmd": "status" },
+  { "id": "w11", "cmd": "status" },
+  { "id": "w12", "cmd": "status" },
+  { "id": "w13", "cmd": "status" },
+  { "id": "w14", "cmd": "status" },
+  { "id": "w15", "cmd": "status" },
+  { "id": "w16", "cmd": "status" },
+  { "id": "cz2", "run": "kill @e[type=minecraft:zombie]" },
+  { "id": "w17", "cmd": "status" },
+  { "id": "w18", "cmd": "status" },
+  {
+    "id": "cstop",
+    "cmd": "queue",
+    "params": { "op": "stop", "id": "ch" },
+    "expect": { "ok": true }
+  },
+  {
+    "__comment": "Q6c：放一个熔炉 + 给铁矿/金矿/煤，两个 smelt 抢租约（一个应 BLOCKED 让出队头）"
+  },
+  { "id": "fz", "run": "setblock {x+3} {y-1} {z} minecraft:furnace" },
+  {
+    "id": "fg",
+    "give": { "minecraft:raw_iron": 4, "minecraft:raw_gold": 4, "minecraft:coal": 8 }
+  },
+  {
+    "id": "s1",
+    "cmd": "smelt",
+    "params": { "item": "minecraft:iron_ingot", "count": 2 },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  {
+    "id": "s2",
+    "cmd": "smelt",
+    "params": { "item": "minecraft:gold_ingot", "count": 2 },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  { "id": "s3", "cmd": "status" },
+  { "id": "s4", "cmd": "status" },
+  { "id": "s5", "cmd": "status" },
+  { "id": "s6", "cmd": "status" },
+  { "id": "s7", "cmd": "status" },
+  { "id": "s8", "cmd": "status" },
+  { "id": "s9", "cmd": "status" },
+  { "id": "s10", "cmd": "status" },
+  { "id": "s11", "cmd": "status" },
+  { "id": "s12", "cmd": "status" },
+  {
+    "id": "scl",
+    "cmd": "queue",
+    "params": { "op": "clear", "kind": "SHORT" },
+    "expect": { "ok": true }
+  },
+  { "id": "z1", "run": "kill @e[type=minecraft:zombie]" }
+]

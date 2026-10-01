@@ -1,0 +1,76 @@
+[
+  {
+    "__comment": "Q2 队列功能真机验证：queue:true 入队 → 状态回执 queued → 队列依次执行 → 清空"
+  },
+  {
+    "id": "q_baseline",
+    "cmd": "status",
+    "expect": {
+      "ok": true,
+      "result.short_size": 0,
+      "result.long_size": 0
+    }
+  },
+  {
+    "id": "q1",
+    "cmd": "look",
+    "params": { "pos": ["{x+2}", "{y}", "{z}"] },
+    "queue": true,
+    "expect": {
+      "ok": true,
+      "state": "queued",
+      "result.queued": true,
+      "result.queue": "SHORT"
+    }
+  },
+  {
+    "id": "q2",
+    "cmd": "look",
+    "params": { "pos": ["{x+3}", "{y}", "{z}"] },
+    "queue": true,
+    "expect": {
+      "ok": true,
+      "state": "queued"
+    }
+  },
+  {
+    "id": "q3",
+    "cmd": "look",
+    "params": { "pos": ["{x+4}", "{y}", "{z}"] },
+    "queue": true,
+    "expect": {
+      "ok": true,
+      "state": "queued"
+    }
+  },
+  {
+    "__comment": "显式 long_term：应入长期队列（短期清空后才跑）"
+  },
+  {
+    "id": "q4",
+    "cmd": "look",
+    "params": { "pos": ["{x}", "{y}", "{z+2}"] },
+    "queue": true,
+    "long_term": true,
+    "expect": {
+      "ok": true,
+      "state": "queued",
+      "result.queue": "LONG"
+    }
+  },
+  {
+    "__comment": "等待队列推进（每条约 10 tick）"
+  },
+  { "id": "w1", "cmd": "status" },
+  { "id": "w2", "cmd": "status" },
+  { "id": "w3", "cmd": "status" },
+  { "id": "w4", "cmd": "status" },
+  {
+    "id": "qend",
+    "cmd": "status",
+    "expect": {
+      "ok": true,
+      "result.short_size": 0
+    }
+  }
+]

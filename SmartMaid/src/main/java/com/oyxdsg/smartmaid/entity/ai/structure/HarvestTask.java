@@ -1,10 +1,14 @@
 package com.oyxdsg.smartmaid.entity.ai.structure;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.oyxdsg.smartmaid.entity.SmartMaidEntity;
 import com.oyxdsg.smartmaid.entity.ai.MaidBlockBreaker;
 import com.oyxdsg.smartmaid.entity.ai.MaidDebug;
 import com.oyxdsg.smartmaid.entity.ai.maidtask.MaidAITask;
+import com.oyxdsg.smartmaid.entity.ai.maidtask.Resumable;
+import com.oyxdsg.smartmaid.entity.ai.maidtask.TaskState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -24,7 +28,7 @@ import java.util.function.Predicate;
  * BFS 从种子位置沿 {@code core}（资源本身）扩展 —— 判据是"相连的资源"，<b>不看树种/矿种</b>：
  * 深色橡木、白桦、橡木同样是树。{@code produce} 只用于 {@code find} 阶段挑哪一棵树。
  */
-public class HarvestTask extends MaidAITask {
+public class HarvestTask extends MaidAITask implements Resumable {
 
     /** BFS 收集目标方块的硬上限（防超大组件一次扫太多，性能护栏） */
     private static final int SCAN_TARGET_LIMIT = 2000;
@@ -224,6 +228,76 @@ public class HarvestTask extends MaidAITask {
         return best;
     }
 
+    // ---------- Resumable（Q7） ----------
+
+    @Override
+    public JsonObject saveState() {
+        JsonObject o = new JsonObject();
+        o.addProperty("version", stateVersion());
+        o.addProperty("collected", this.collected);
+        o.addProperty("remaining", this.remaining);
+        o.addProperty("scanned", this.scanned);
+        o.addProperty("done", this.done);
+        o.addProperty("lastOk", this.lastOk);
+        o.add("pending", TaskState.posList(this.pending));
+        JsonArray visitedArr = new JsonArray();
+        for (Long l : this.visited) {
+            visitedArr.add(l);
+        }
+        o.add("visited", visitedArr);
+        JsonArray retryArr = new JsonArray();
+        for (Map.Entry<BlockPos, Integer> e : this.retryCount.entrySet()) {
+            JsonObject r = new JsonObject();
+            r.add("pos", TaskState.pos(e.getKey()));
+            r.addProperty("n", e.getValue());
+            retryArr.add(r);
+        }
+        o.add("retry", retryArr);
+        return o;
+    }
+
+    @Override
+    public void restoreState(JsonObject s) {
+        if (s == null) {
+            return;
+        }
+        this.collected = s.has("collected") ? s.get("collected").getAsInt() : 0;
+        this.remaining = s.has("remaining") ? s.get("remaining").getAsInt() : 0;
+        this.scanned = s.has("scanned") && s.get("scanned").getAsBoolean();
+        this.done = s.has("done") && s.get("done").getAsBoolean();
+        this.lastOk = !s.has("lastOk") || s.get("lastOk").getAsBoolean();
+        this.pending.clear();
+        this.pending.addAll(TaskState.readPosList(s.get("pending")));
+        this.visited.clear();
+        if (s.has("visited") && s.get("visited").isJsonArray()) {
+            for (JsonElement e : s.getAsJsonArray("visited")) {
+                this.visited.add(e.getAsLong());
+            }
+        }
+        this.retryCount.clear();
+        if (s.has("retry") && s.get("retry").isJsonArray()) {
+            for (JsonElement e : s.getAsJsonArray("retry")) {
+                if (e.isJsonObject()) {
+                    JsonObject r = e.getAsJsonObject();
+                    BlockPos p = TaskState.readPos(r.get("pos"));
+                    if (p != null) {
+                        this.retryCount.put(p, r.has("n") ? r.get("n").getAsInt() : 0);
+                    }
+                }
+            }
+        }
+    }
+
+    @Override
+    public int stateVersion() {
+        return 1;
+    }
+
+    @Override
+    public boolean validateState(SmartMaidEntity maid, JsonObject s) {
+        return this.seed != null && this.matcher != null && maid != null;
+    }
+
     @Override
     public boolean isDone() {
         return this.done;
@@ -238,6 +312,11 @@ public class HarvestTask extends MaidAITask {
     public void forceStop(SmartMaidEntity maid) {
         this.breaker.abort(maid);
         this.done = true;
+    }
+
+    @Override
+    public String progressToken() {
+        return "collected=" + this.collected;
     }
 
     @Override

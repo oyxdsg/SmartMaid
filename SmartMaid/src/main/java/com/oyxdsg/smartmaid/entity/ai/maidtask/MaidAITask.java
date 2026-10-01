@@ -51,6 +51,24 @@ public abstract class MaidAITask {
         return false;
     }
 
+    /** 是否因资源被占而阻塞（如无空闲熔炉）；调度器据此暂停并让出队头（§8.8b）。默认 false。 */
+    public boolean isBlocked() {
+        return false;
+    }
+
+    /** 进度令牌（可选）：非 null 时调度器据此做"长期任务无进展检测"（§十一）。默认 null = 不检测。 */
+    public String progressToken() {
+        return null;
+    }
+
+    /** 被暂停（战斗 / 资源阻塞）前调用：释放外部资源（如熔炉租约）；默认无操作。 */
+    public void onSuspend() {
+    }
+
+    /** 从暂停恢复时调用；默认无操作。 */
+    public void onResume() {
+    }
+
     /** 被抢占/取消/坐下时调用，清理现场（默认无操作） */
     public void forceStop(SmartMaidEntity maid) {
     }

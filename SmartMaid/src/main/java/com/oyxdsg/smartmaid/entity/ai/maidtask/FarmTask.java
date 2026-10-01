@@ -1,5 +1,6 @@
 package com.oyxdsg.smartmaid.entity.ai.maidtask;
 
+import com.google.gson.JsonObject;
 import com.oyxdsg.smartmaid.entity.SmartMaidEntity;
 import com.oyxdsg.smartmaid.entity.ai.MaidActions;
 import com.oyxdsg.smartmaid.entity.ai.MaidDebug;
@@ -19,7 +20,7 @@ import java.util.List;
  *
  * <p>播种用通用 {@link MaidActions#useItemOn}（种子右键耕地，26.2 已移除 ItemNameBlockItem，不依赖具体类）。</p>
  */
-public class FarmTask extends MaidAITask {
+public class FarmTask extends MaidAITask implements Resumable {
 
     private final BlockPos center;
     private final int range;
@@ -68,6 +69,36 @@ public class FarmTask extends MaidAITask {
     @Override
     public String result() {
         return "耕作区域处理完毕";
+    }
+
+    // ---------- Resumable（Q7） ----------
+
+    @Override
+    public JsonObject saveState() {
+        JsonObject o = new JsonObject();
+        o.addProperty("version", stateVersion());
+        o.add("center", TaskState.pos(this.center));
+        o.addProperty("range", this.range);
+        o.addProperty("done", this.done);
+        return o;
+    }
+
+    @Override
+    public void restoreState(JsonObject s) {
+        if (s == null) {
+            return;
+        }
+        this.done = s.has("done") && s.get("done").getAsBoolean();
+    }
+
+    @Override
+    public int stateVersion() {
+        return 1;
+    }
+
+    @Override
+    public boolean validateState(SmartMaidEntity maid, JsonObject s) {
+        return this.center != null && maid != null;
     }
 
     private void handlePosition(SmartMaidEntity maid, BlockPos pos) {

@@ -11,7 +11,7 @@ import net.minecraft.world.entity.LivingEntity;
  */
 public class GuardTask extends MaidAITask {
 
-    private final int range;
+    private int range;
     private final boolean defensive;
     private LivingEntity target;
     private int cooldown;
@@ -31,6 +31,11 @@ public class GuardTask extends MaidAITask {
     @Override
     public boolean isContinuous() {
         return true;
+    }
+
+    /** guard 合并（§8.8a）：不新增任务，把现有护卫范围更新为两者较大值。 */
+    public void setRange(int range) {
+        this.range = range;
     }
 
     @Override

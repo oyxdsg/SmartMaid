@@ -46,7 +46,13 @@ public final class MaidDebug {
 
     private static void ensureLoaded() {
         if (!loaded) {
-            reload();
+            try {
+                reload();
+            } catch (Throwable t) {
+                // 加载失败（如无 Fabric 运行环境的离线单元测试）→ 保持默认关闭，
+                // 绝不让调试日志把调用方拖崩
+                loaded = true;
+            }
         }
     }
 

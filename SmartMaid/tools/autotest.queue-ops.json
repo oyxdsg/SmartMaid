@@ -1,0 +1,198 @@
+[
+  {
+    "__comment": "Q4/Q5/Q6 队列真机验证：队列操作命令 / 同键去重 / 战斗打断 / guard 合并。Q5 看日志（Task 暂停(COMBAT)/恢复）。"
+  },
+  {
+    "id": "b0",
+    "cmd": "status",
+    "expect": { "ok": true, "result.short_size": 0, "result.long_size": 0 }
+  },
+  {
+    "__comment": "Q4-a：用 guard 占住 current，入队 3 个 look，验证 query/moveUp/remove/clear/cancelCurrent"
+  },
+  {
+    "id": "h1",
+    "cmd": "guard",
+    "params": { "range": 8 },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  {
+    "id": "q1",
+    "cmd": "look",
+    "params": { "pos": ["{x+1}", "{y}", "{z}"] },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  {
+    "id": "q2",
+    "cmd": "look",
+    "params": { "pos": ["{x+2}", "{y}", "{z}"] },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  {
+    "id": "q3",
+    "cmd": "look",
+    "params": { "pos": ["{x+3}", "{y}", "{z}"] },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  {
+    "id": "qp",
+    "cmd": "queue",
+    "params": { "op": "query" },
+    "expect": { "ok": true, "result.current.cmd": "guard", "result.short_size": 3 }
+  },
+  {
+    "id": "qmu",
+    "cmd": "queue",
+    "params": { "op": "moveUp", "id": "q3" },
+    "expect": { "ok": true }
+  },
+  {
+    "id": "qrm",
+    "cmd": "queue",
+    "params": { "op": "remove", "id": "q2", "kind": "SHORT" },
+    "expect": { "ok": true }
+  },
+  {
+    "id": "qp2",
+    "cmd": "queue",
+    "params": { "op": "query" },
+    "expect": { "ok": true, "result.short_size": 2 }
+  },
+  {
+    "id": "qcl",
+    "cmd": "queue",
+    "params": { "op": "clear", "kind": "SHORT" },
+    "expect": { "ok": true }
+  },
+  {
+    "id": "qp3",
+    "cmd": "queue",
+    "params": { "op": "query" },
+    "expect": { "ok": true, "result.short_size": 0, "result.current.cmd": "guard" }
+  },
+  {
+    "id": "qcc",
+    "cmd": "queue",
+    "params": { "op": "cancelCurrent" },
+    "expect": { "ok": true }
+  },
+  {
+    "__comment": "Q6-a：同键去重（move 同坐标第二次应被拒）"
+  },
+  {
+    "id": "m1",
+    "cmd": "move",
+    "params": { "pos": ["{x+8}", "{y}", "{z}"] },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  {
+    "id": "m2",
+    "cmd": "move",
+    "params": { "pos": ["{x+8}", "{y}", "{z}"] },
+    "queue": true,
+    "expect": { "ok": false }
+  },
+  {
+    "id": "m3",
+    "cmd": "move",
+    "params": { "pos": ["{x+9}", "{y}", "{z}"] },
+    "queue": true,
+    "expect": { "ok": true, "state": "queued" }
+  },
+  {
+    "id": "mcl",
+    "cmd": "queue",
+    "params": { "op": "clear", "kind": "SHORT" },
+    "expect": { "ok": true }
+  },
+  {
+    "__comment": "填充分隔（越过 60t 时间窗）"
+  },
+  { "id": "f1", "cmd": "status" },
+  { "id": "f2", "cmd": "status" },
+  { "id": "f3", "cmd": "status" },
+  { "id": "f4", "cmd": "status" },
+  { "id": "f5", "cmd": "status" },
+  { "id": "f6", "cmd": "status" },
+  { "id": "f7", "cmd": "status" },
+  {
+    "__comment": "Q5：挂一个长期 guard，召僵尸触发战斗（应看到 任务暂停(COMBAT) 与恢复）"
+  },
+  {
+    "id": "ch",
+    "cmd": "guard",
+    "params": { "range": 12 },
+    "queue": true,
+    "long_term": true,
+    "expect": { "ok": true }
+  },
+  {
+    "id": "cz",
+    "run": "summon minecraft:zombie {x+4} {y} {z}"
+  },
+  { "id": "w1", "cmd": "status" },
+  { "id": "w2", "cmd": "status" },
+  { "id": "w3", "cmd": "status" },
+  { "id": "w4", "cmd": "status" },
+  { "id": "w5", "cmd": "status" },
+  { "id": "w6", "cmd": "status" },
+  { "id": "w7", "cmd": "status" },
+  { "id": "w8", "cmd": "status" },
+  { "id": "w9", "cmd": "status" },
+  { "id": "w10", "cmd": "status" },
+  { "id": "w11", "cmd": "status" },
+  { "id": "w12", "cmd": "status" },
+  {
+    "id": "cz2",
+    "run": "kill @e[type=minecraft:zombie]"
+  },
+  { "id": "w13", "cmd": "status" },
+  { "id": "w14", "cmd": "status" },
+  {
+    "id": "cstop",
+    "cmd": "queue",
+    "params": { "op": "stop", "id": "ch" },
+    "expect": { "ok": true }
+  },
+  {
+    "__comment": "Q6-b：guard 合并取最大 range（与上面间隔 >60t）"
+  },
+  { "id": "x1", "cmd": "status" },
+  { "id": "x2", "cmd": "status" },
+  { "id": "x3", "cmd": "status" },
+  { "id": "x4", "cmd": "status" },
+  { "id": "x5", "cmd": "status" },
+  { "id": "x6", "cmd": "status" },
+  { "id": "x7", "cmd": "status" },
+  {
+    "id": "g1",
+    "cmd": "guard",
+    "params": { "range": 10 },
+    "queue": true,
+    "long_term": true,
+    "expect": { "ok": true }
+  },
+  {
+    "id": "g2",
+    "cmd": "guard",
+    "params": { "range": 12 },
+    "queue": true,
+    "long_term": true,
+    "expect": { "ok": true, "result.merged": true, "result.note": "已并入现有护卫任务，范围取最大 12" }
+  },
+  {
+    "id": "gstop",
+    "cmd": "queue",
+    "params": { "op": "stop", "id": "g1" },
+    "expect": { "ok": true }
+  },
+  {
+    "id": "z1",
+    "run": "kill @e[type=minecraft:zombie]"
+  }
+]

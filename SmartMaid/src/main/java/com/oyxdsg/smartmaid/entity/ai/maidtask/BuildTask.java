@@ -1,5 +1,6 @@
 package com.oyxdsg.smartmaid.entity.ai.maidtask;
 
+import com.google.gson.JsonObject;
 import com.oyxdsg.smartmaid.entity.SmartMaidEntity;
 import com.oyxdsg.smartmaid.entity.ai.MaidBlockPlacer;
 import com.oyxdsg.smartmaid.entity.ai.MaidDebug;
@@ -15,7 +16,7 @@ import java.util.List;
  * <p>放置复用 {@link MaidBlockPlacer}（自动换方块到主手、走到目标旁、选支撑面放置）。
  * 蓝图（相对坐标模板）为后续扩展。</p>
  */
-public class BuildTask extends MaidAITask {
+public class BuildTask extends MaidAITask implements Resumable {
 
     private final List<BlockPos> positions;
     private int index;
@@ -83,5 +84,36 @@ public class BuildTask extends MaidAITask {
     @Override
     public void forceStop(SmartMaidEntity maid) {
         this.placer.abort();
+    }
+
+    // ---------- Resumable（Q7） ----------
+
+    @Override
+    public JsonObject saveState() {
+        JsonObject o = new JsonObject();
+        o.addProperty("version", stateVersion());
+        o.addProperty("index", this.index);
+        o.addProperty("outOfBlock", this.outOfBlock);
+        o.add("positions", TaskState.posList(this.positions));
+        return o;
+    }
+
+    @Override
+    public void restoreState(JsonObject s) {
+        if (s == null) {
+            return;
+        }
+        this.index = s.has("index") ? s.get("index").getAsInt() : 0;
+        this.outOfBlock = s.has("outOfBlock") && s.get("outOfBlock").getAsBoolean();
+    }
+
+    @Override
+    public int stateVersion() {
+        return 1;
+    }
+
+    @Override
+    public boolean validateState(SmartMaidEntity maid, JsonObject s) {
+        return this.positions != null && !this.positions.isEmpty() && maid != null;
     }
 }

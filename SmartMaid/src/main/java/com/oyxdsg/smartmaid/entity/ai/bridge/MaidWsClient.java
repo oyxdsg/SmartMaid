@@ -488,6 +488,22 @@ public final class MaidWsClient {
         if (msg.has("persist") && msg.get("persist").isJsonPrimitive()) {
             req.addProperty("persist", msg.get("persist").getAsBoolean());
         }
+        // N1/Q4/Q6：转发队列相关字段（桌宠语音线带 priority:"owner" → 主人 P2；展开多项带 group）
+        if (msg.has("queue") && msg.get("queue").isJsonPrimitive()) {
+            req.addProperty("queue", msg.get("queue").getAsBoolean());
+        }
+        if (msg.has("priority") && msg.get("priority").isJsonPrimitive()) {
+            req.addProperty("priority", msg.get("priority").getAsString());
+        }
+        if (msg.has("long_term") && msg.get("long_term").isJsonPrimitive()) {
+            req.addProperty("long_term", msg.get("long_term").getAsBoolean());
+        }
+        if (msg.has("group") && !msg.get("group").isJsonNull()) {
+            req.addProperty("group", msg.get("group").getAsString());
+        }
+        if (msg.has("group_label") && !msg.get("group_label").isJsonNull()) {
+            req.addProperty("group_label", msg.get("group_label").getAsString());
+        }
         return req.toString();
     }
 

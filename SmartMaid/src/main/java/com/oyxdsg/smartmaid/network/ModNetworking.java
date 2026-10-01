@@ -1,11 +1,14 @@
 package com.oyxdsg.smartmaid.network;
 
+import com.google.gson.JsonObject;
 import com.oyxdsg.smartmaid.SmartMaid;
 import com.oyxdsg.smartmaid.data.MaidSettings;
 import com.oyxdsg.smartmaid.entity.SmartMaidEntity;
 import com.oyxdsg.smartmaid.entity.ai.MaidDebug;
+import com.oyxdsg.smartmaid.entity.ai.bridge.MaidAIBridge;
 import com.oyxdsg.smartmaid.entity.ai.bridge.MaidWsClient;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -31,6 +34,18 @@ public final class ModNetworking {
     /** 玩家聊天栏对话包（C2S） */
     public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.TypeAndCodec<?, MaidChatPayload> MAID_CHAT_CODEC =
             PayloadTypeRegistry.serverboundPlay().register(MaidChatPayload.TYPE, MaidChatPayload.STREAM_CODEC);
+
+    /** 菜单动作包（C2S）：队列 op 白名单（Q9/N1） */
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.TypeAndCodec<?, MaidMenuActionPayload> MAID_MENU_ACTION_CODEC =
+            PayloadTypeRegistry.serverboundPlay().register(MaidMenuActionPayload.TYPE, MaidMenuActionPayload.STREAM_CODEC);
+
+    /** 打开纯 Screen 主菜单（S2C，N1） */
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.TypeAndCodec<?, MaidOpenMenuPayload> MAID_OPEN_MENU_CODEC =
+            PayloadTypeRegistry.clientboundPlay().register(MaidOpenMenuPayload.TYPE, MaidOpenMenuPayload.STREAM_CODEC);
+
+    /** 菜单状态快照（S2C，N1 步骤 2/3） */
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.TypeAndCodec<?, MaidMenuStatePayload> MAID_MENU_STATE_CODEC =
+            PayloadTypeRegistry.clientboundPlay().register(MaidMenuStatePayload.TYPE, MaidMenuStatePayload.STREAM_CODEC);
 
     public static void register() {
         ServerPlayNetworking.registerGlobalReceiver(MaidCommandPayload.TYPE, (payload, context) -> {
@@ -72,6 +87,7 @@ public final class ModNetworking {
                 MaidSettings.save(player.getUUID());
                 maid.getSettings().applyToMaid(maid);
                 MaidDebug.log("设置更新 " + payload.field() + "=" + payload.value());
+                sendMenuState(player, maid); // 回推新值（设置页实时刷新）
             });
         });
 
@@ -91,6 +107,103 @@ public final class ModNetworking {
                 MaidWsClient.sendChat(maid, payload.text());
             });
         });
+
+        // 菜单动作（N1）：转成 queue 指令走 MaidAIBridge，与 /maidai 同一条路径
+        ServerPlayNetworking.registerGlobalReceiver(MaidMenuActionPayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            player.level().getServer().execute(() -> {
+                if (!(player.level() instanceof ServerLevel level)) {
+                    return;
+                }
+                SmartMaidEntity maid = findOwnerMaid(level, player);
+                if (maid == null) {
+                    return;
+                }
+                String json;
+                if ("enqueue".equals(payload.op()) && !payload.cmd().isEmpty()) {
+                    // 菜单下发新任务：主人显式（P2）→ 插队首
+                    JsonObject req = new JsonObject();
+                    req.addProperty("id", "menu");
+                    req.addProperty("cmd", payload.cmd());
+                    req.add("params", parseParams(payload.params()));
+                    req.addProperty("queue", true);
+                    req.addProperty("priority", "owner");
+                    json = req.toString();
+                } else {
+                    JsonObject params = new JsonObject();
+                    params.addProperty("op", payload.op());
+                    if ("stopGroup".equals(payload.op())) {
+                        // 整组停止：把 id 字段当组 id 传入
+                        params.addProperty("group", payload.id());
+                    } else {
+                        if (!payload.id().isEmpty()) {
+                            params.addProperty("id", payload.id());
+                        }
+                        if (!payload.kind().isEmpty()) {
+                            params.addProperty("kind", payload.kind());
+                        }
+                        if (payload.value() != 0) {
+                            params.addProperty("to", payload.value());
+                        }
+                    }
+                    JsonObject req = new JsonObject();
+                    req.addProperty("id", "menu");
+                    req.addProperty("cmd", "queue");
+                    req.add("params", params);
+                    json = req.toString();
+                }
+                com.oyxdsg.smartmaid.entity.ai.bridge.MaidCommandResult result = MaidAIBridge.execute(maid, json);
+                // 动作后立刻回发状态 + 回执（N1 步骤 2/3）；周期查询不带回执，避免刷屏
+                sendMenuState(player, maid, "query".equals(payload.op()) ? null : result);
+            });
+        });
+
+        // 玩家断线时保存女仆数据（含任务队列）→ Q8 持久化不丢"退出前刚加的任务"
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
+            ServerPlayer player = handler.getPlayer();
+            if (player.level() instanceof ServerLevel level) {
+                SmartMaidEntity maid = findOwnerMaid(level, player);
+                if (maid != null) {
+                    com.oyxdsg.smartmaid.data.MaidDataManager.save(maid);
+                }
+            }
+        });
+    }
+
+    private static JsonObject parseParams(String s) {
+        try {
+            return com.google.gson.JsonParser.parseString(s).getAsJsonObject();
+        } catch (Exception e) {
+            return new JsonObject();
+        }
+    }
+
+    /** 向玩家发送一次菜单状态快照（S2C）：队列 + 战斗 + 饱食度。 */
+    public static void sendMenuState(ServerPlayer player, SmartMaidEntity maid) {
+        sendMenuState(player, maid, null);
+    }
+
+    /** 带回执的状态快照：回执附带 ok + 简短文案（供客户端 toast）。 */
+    public static void sendMenuState(ServerPlayer player, SmartMaidEntity maid,
+                                     com.oyxdsg.smartmaid.entity.ai.bridge.MaidCommandResult result) {
+        JsonObject st = maid.getMaidTaskManager().snapshot();
+        st.addProperty("food", maid.getMaidFood().getFoodLevel());
+        st.add("settings", maid.getSettings().toJson());
+        if (result != null) {
+            st.addProperty("receipt_ok", result.ok());
+            st.addProperty("receipt_msg", result.ok() ? result.step() : errOf(result));
+        }
+        ServerPlayNetworking.send(player, new MaidMenuStatePayload(st.toString()));
+    }
+
+    private static String errOf(com.oyxdsg.smartmaid.entity.ai.bridge.MaidCommandResult r) {
+        if (r.result().has("error")) {
+            return r.result().get("error").getAsString();
+        }
+        if (r.result().has("reason")) {
+            return r.result().get("reason").getAsString();
+        }
+        return "失败";
     }
 
     /** 查找某玩家名下的女仆（每玩家仅一只） */

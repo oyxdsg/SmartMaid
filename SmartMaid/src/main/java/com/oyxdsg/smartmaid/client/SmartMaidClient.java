@@ -5,11 +5,16 @@ import com.oyxdsg.smartmaid.SmartMaid;
 import com.oyxdsg.smartmaid.client.chat.MaidChatClient;
 import com.oyxdsg.smartmaid.client.gui.MaidControlScreen;
 import com.oyxdsg.smartmaid.client.gui.MaidInventoryScreen;
+import com.oyxdsg.smartmaid.client.gui.MaidMenuScreen;
+import com.oyxdsg.smartmaid.client.gui.MaidSettingsScreen;
+import com.oyxdsg.smartmaid.client.gui.MaidTaskScreen;
 import com.oyxdsg.smartmaid.client.renderer.SmartMaidRenderer;
 import com.oyxdsg.smartmaid.init.ModEntities;
 import com.oyxdsg.smartmaid.init.ModMenus;
 import com.oyxdsg.smartmaid.network.MaidChatPayload;
 import com.oyxdsg.smartmaid.network.MaidCommandPayload;
+import com.oyxdsg.smartmaid.network.MaidMenuStatePayload;
+import com.oyxdsg.smartmaid.network.MaidOpenMenuPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
@@ -33,6 +38,23 @@ public class SmartMaidClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.SMART_MAID, SmartMaidRenderer::new);
         MenuScreens.register(ModMenus.MAID_INVENTORY_MENU, MaidInventoryScreen::new);
         MenuScreens.register(ModMenus.MAID_CONTROL_MENU, MaidControlScreen::new);
+
+        // N1：服务端让打开女仆主菜单 → 客户端开纯 Screen（不挂容器）
+        ClientPlayNetworking.registerGlobalReceiver(MaidOpenMenuPayload.TYPE, (payload, context) ->
+                Minecraft.getInstance().execute(() ->
+                        Minecraft.getInstance().setScreenAndShow(new MaidMenuScreen(payload.maidId(), payload.food()))));
+
+        // N1 步骤 2/3：菜单状态快照 → 刷新当前活跃的菜单/任务页
+        ClientPlayNetworking.registerGlobalReceiver(MaidMenuStatePayload.TYPE, (payload, context) ->
+                Minecraft.getInstance().execute(() -> {
+                    if (MaidTaskScreen.ACTIVE != null) {
+                        MaidTaskScreen.ACTIVE.updateState(payload.json());
+                    } else if (MaidSettingsScreen.ACTIVE != null) {
+                        MaidSettingsScreen.ACTIVE.updateState(payload.json());
+                    } else if (MaidMenuScreen.ACTIVE != null) {
+                        MaidMenuScreen.ACTIVE.updateState(payload.json());
+                    }
+                }));
 
         // 女仆对话模式：拦截普通聊天文本，转给女仆 AI；//maidchat 开关
         ClientSendMessageEvents.ALLOW_CHAT.register(text -> {

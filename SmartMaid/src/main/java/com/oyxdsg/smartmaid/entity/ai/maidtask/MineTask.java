@@ -24,7 +24,7 @@ import java.util.Set;
  * <p>26.2 移除了 OreBlock（已反编译确认），矿物判定改用矿石标签
  * （coal_ores / iron_ores / gold_ores / diamond_ores 等，均存在于原版数据包）。</p>
  */
-public class MineTask extends MaidAITask {
+public class MineTask extends MaidAITask implements Resumable {
 
     /** 垂直扫描范围（格）：比水平小，避免 y 方向扫太深/太高 */
     private static final int Y_RANGE = 8;
@@ -124,6 +124,51 @@ public class MineTask extends MaidAITask {
     @Override
     public void forceStop(SmartMaidEntity maid) {
         this.breaker.abort(maid); // 清理裂纹并复位
+    }
+
+    @Override
+    public String progressToken() {
+        return "mined=" + this.mined;
+    }
+
+    // ---------- Resumable（Q7） ----------
+
+    @Override
+    public JsonObject saveState() {
+        JsonObject o = new JsonObject();
+        o.addProperty("version", stateVersion());
+        o.add("center", TaskState.pos(this.center));
+        o.addProperty("range", this.range);
+        o.addProperty("count", this.count);
+        o.addProperty("mined", this.mined);
+        o.addProperty("noOre", this.noOre);
+        if (this.current != null) {
+            o.add("current", TaskState.pos(this.current));
+        }
+        o.add("skipped", TaskState.posList(this.skipped));
+        return o;
+    }
+
+    @Override
+    public void restoreState(JsonObject s) {
+        if (s == null) {
+            return;
+        }
+        this.mined = s.has("mined") ? s.get("mined").getAsInt() : 0;
+        this.noOre = s.has("noOre") && s.get("noOre").getAsBoolean();
+        this.current = TaskState.readPos(s.get("current"));
+        this.skipped.clear();
+        this.skipped.addAll(TaskState.readPosList(s.get("skipped")));
+    }
+
+    @Override
+    public int stateVersion() {
+        return 1;
+    }
+
+    @Override
+    public boolean validateState(SmartMaidEntity maid, JsonObject s) {
+        return this.center != null && maid != null;
     }
 
     /** 区域内找最近的、尚未判定挖不到的矿石方块。

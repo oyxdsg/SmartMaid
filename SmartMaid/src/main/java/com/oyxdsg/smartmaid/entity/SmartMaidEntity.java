@@ -891,8 +891,12 @@ public class SmartMaidEntity extends TamableAnimal implements ContainerUser {
         // 主人空手右键 → 坐下/站起；Shift+右键 → 女仆管理菜单（Shift+E 打开女仆背包，两者并存）
         if (this.isOwnedBy(player) && player.getItemInHand(hand).isEmpty()) {
             if (player.isShiftKeyDown()) {
-                if (!player.level().isClientSide()) {
-                    player.openMenu(new MaidControlMenuProvider(this));
+                if (!player.level().isClientSide() && player instanceof net.minecraft.server.level.ServerPlayer sp) {
+                    // N1：Shift+右键 改开客户端纯 Screen 主菜单（不挂容器）
+                    net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(sp,
+                            new com.oyxdsg.smartmaid.network.MaidOpenMenuPayload(
+                                    this.getId(), this.getMaidFood().getFoodLevel()));
+                    com.oyxdsg.smartmaid.network.ModNetworking.sendMenuState(sp, this);
                 }
                 return InteractionResult.SUCCESS;
             }
@@ -903,6 +907,16 @@ public class SmartMaidEntity extends TamableAnimal implements ContainerUser {
             return InteractionResult.SUCCESS;
         }
         return super.mobInteract(player, hand);
+    }
+
+    @Override
+    public void remove(net.minecraft.world.entity.Entity.RemovalReason reason) {
+        // 世界卸载/退出时也保存一次（含任务队列），保证 Q8 持久化不丢最后操作
+        if (!this.level().isClientSide()
+                && reason != net.minecraft.world.entity.Entity.RemovalReason.KILLED) {
+            MaidDataManager.save(this);
+        }
+        super.remove(reason);
     }
 
     @Override

@@ -29,6 +29,9 @@ dependencies {
     include "player_animation_library:player_animation_library:1.2.6"
     // PAL 内嵌的 mocha 表达式引擎（MochaEngine 类，编译需要；运行时由 PAL 的 jar-in-jar 提供）
     implementation "mochafloats:mochafloats:5.0.0"
+    // 离线单元测试（仅测试期，不打包进发布 jar）：纯服务端逻辑快速验证
+    testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
 }
 
 processResources {
@@ -50,4 +53,8 @@ java {
     withSourcesJar()
     sourceCompatibility = JavaVersion.VERSION_25
     targetCompatibility = JavaVersion.VERSION_25
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
 }
