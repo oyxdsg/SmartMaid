@@ -18,12 +18,40 @@
     from _paths import minecraft_dir, deskpet_dir, deskpet_assets
     mc = minecraft_dir()
 """
+import glob
 import json
 import os
+import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(HERE, "local_paths.json")
+
+
+def find_jdk_tool(name: str, override: str | None = None) -> str | None:
+    """定位 JDK 工具（javac / javap）。
+
+    解析顺序：显式 override → 与 probe_api 的 JAVAP_CANDIDATES 同目录 → HMCL 下载的
+    JDK（`~/.hmcl/java/**/bin/`）→ PATH。26.1+ 必须用 JDK 25，HMCL 那份最可靠。
+    """
+    if override:
+        return override
+    try:
+        from probe_api import JAVAP_CANDIDATES
+        for jp in JAVAP_CANDIDATES:
+            for hit in sorted(glob.glob(jp)):
+                cand = os.path.join(os.path.dirname(hit), name + ".exe")
+                if os.path.isfile(cand):
+                    return cand
+    except Exception:
+        pass
+    home = os.path.expanduser("~")
+    for pat in (os.path.join(home, ".hmcl", "java", "*", "*", "bin", name + ".exe"),
+                os.path.join(home, ".hmcl", "java", "*", "bin", name + ".exe")):
+        hits = sorted(glob.glob(pat))
+        if hits:
+            return hits[-1]
+    return shutil.which(name)
 
 _HINT = (
     "\n请任选一种方式提供路径：\n"

@@ -101,7 +101,7 @@ public class MaidBlockBreaker {
         this.target = pos.immutable();
         this.digTicks = 0;
         this.digTotal = total;
-        maid.swing(InteractionHand.MAIN_HAND);
+        com.oyxdsg.smartmaid.compat.MaidCompat.swing(maid, InteractionHand.MAIN_HAND);
         MaidDebug.log("Breaker begin " + this.target + " (" + total + "t)");
         return true;
     }
@@ -146,7 +146,7 @@ public class MaidBlockBreaker {
                     this.target.getY() + 0.5D, this.target.getZ() + 0.5D);
             this.digTicks++;
             if (this.digTicks % SWING_INTERVAL == 0) {
-                maid.swing(InteractionHand.MAIN_HAND);
+                com.oyxdsg.smartmaid.compat.MaidCompat.swing(maid, InteractionHand.MAIN_HAND);
             }
             if (MaidDebug.verbose() && this.digTicks % 10 == 0) {
                 MaidDebug.log("Breaker 挖掘中 " + this.target + " " + this.digTicks + "/" + this.digTotal);
@@ -254,7 +254,7 @@ public class MaidBlockBreaker {
                 this.target.getY() + 0.5D, this.target.getZ() + 0.5D);
         this.digTicks++;
         if (this.digTicks % SWING_INTERVAL == 0) {
-            maid.swing(InteractionHand.MAIN_HAND);
+            com.oyxdsg.smartmaid.compat.MaidCompat.swing(maid, InteractionHand.MAIN_HAND);
         }
         if (MaidDebug.verbose() && this.digTicks % 10 == 0) {
             MaidDebug.log("Breaker 挖掘中 " + this.target + " " + this.digTicks + "/" + this.digTotal);

@@ -1,6 +1,6 @@
 # Smart Maid · 智能女仆模组
 
-规则引擎驱动的 AI 女仆模组（Minecraft 26.2 / Fabric），灵感来自 Touhou Little Maid（车万女仆）。
+规则引擎驱动的 AI 女仆模组（Minecraft **26.2 / 26.3** · Fabric），灵感来自 Touhou Little Maid（车万女仆）。
 
 女仆由指令召唤、唯一归属玩家、退出游戏消失（数据本地持久化）。行为由本地规则引擎主导（安全优先、毫秒级响应），AI 作兜底增强，通过 WebSocket 与桌面宠物程序联动，把桌宠的 AI 聊天 / 语音 / 气泡能力接入女仆。
 
@@ -15,6 +15,8 @@
 **战斗走位死区 + 盾牌免前摇 + 背包模型预览已落地（2026-09-19）**——近战死区 2.7~3.2；盾牌覆写 `getItemBlockingWith` 去掉 0.25s 架盾前摇（女仆=PVE 高手，检测到威胁即当场举盾 100% 挡箭）；女仆背包界面左上角渲染女仆自身缩小模型（跟随鼠标旋转）。
 
 **挖矿坐标可选 + 挖掘面向 + 对话事件静默 + 生物名中文已落地（2026-09-19）**——`mine` 不给坐标自动探测周围矿物（水平 12 / 垂直 8 格）、挖掘面向目标挥镐；玩家对话女仆期间游戏事件 AI 静默（消除"一条消息多条回复"）；感知/状态里生物名翻译中文。
+
+**多版本兼容：26.3 支持已落地（2026-10-07，真机验证）**——同一份源码按版本切构建（`gradle.properties` 的 `mc_series`，默认 26.2），每个版本产出**只声明自己支持范围**的 jar；版本差异全部收敛在 `compat/MaidCompat`。26.3 的渲染与输入后端是大改（Blaze3D→Renderpearl、GLFW→SDL），适配结论与踩坑见 [`DESIGN_MULTIVERSION.md`](./DESIGN_MULTIVERSION.md)；配套的自动化测试体系见 [`TEST_SYSTEM.md`](./TEST_SYSTEM.md)。
 
 ## 相关仓库（先看这里）
 
@@ -112,29 +114,39 @@ SmartMaid 是**桌面宠物 DeskPet 的 Minecraft 侧搭档**——女仆的 AI 
 
 ## 环境要求
 
-| 项 | 要求 |
-|---|---|
-| Minecraft | 26.2（`~26.2`） |
-| 加载器 | Fabric Loader >= 0.18.4（开发用 0.19.3） |
-| 前置 | Fabric API `0.158.0+26.2` |
-| Java | >= 25（JDK 25 构建） |
-| Gradle | 9.7.1（wrapper 内置） |
+| 项 | 26.2 线 | 26.3 线 |
+|---|---|---|
+| Minecraft | 26.2（`~26.2`） | 26.3（`~26.3`） |
+| 加载器 | Fabric Loader >= 0.18.4（开发用 0.19.3） | Fabric Loader >= 0.19.5 |
+| 前置 | Fabric API `0.158.0+26.2` | Fabric API `0.161.0+26.3` |
+| 内置动画库 | Player Animation Library `1.2.6` | Player Animation Library `1.2.7` |
+| Java | >= 25（JDK 25 构建） | >= 25（JDK 25 构建） |
+| Gradle | 9.7.1（wrapper 内置） | 9.7.1（wrapper 内置） |
+
+> **一版本一个 jar** —— 每个 jar 只声明自己**真正支持**的版本范围。
+> 建议**不要**打"宽范围通吃"的 jar：Fabric Loader 不做 mod 版本握手，协议号不一致时会**静默网络失败**。
 
 ## 构建
 
 ```bash
-# 需要 JDK 25（Minecraft 26.2 要求），先设置 JAVA_HOME 指向你的 JDK 25 安装目录
+# 需要 JDK 25（26.2 起要求），先设置 JAVA_HOME 指向你的 JDK 25 安装目录
 $env:JAVA_HOME="<你的 JDK 25 安装目录>"
-gradlew.bat build
+gradlew.bat build                          # 默认构建 26.2 线
 ```
 
-产物在 `build/libs/smartmaid-<version>.jar`，放入 `.minecraft/mods/` 即可。
+26.3 线的构建参数已接好（`gradlew.bat build -Pmc_series=26.3 -Pminecraft_version=26.3 -Ploader_version=0.19.5 -Pfabric_api_version=0.161.0+26.3`），
+⚠️ 但**该 Gradle 路径尚未实跑**；当前 26.3 产物走 `tools/compile_check.py --package` 这条纯 javac 通路（见 `TEST_SYSTEM.md`）。
+
+产物在 `build/libs/smartmaid-<version>.jar`，放入对应版本的 `mods/` 即可。
 
 > 国内网络：Gradle 发行版走腾讯镜像（`gradle/wrapper/gradle-wrapper.properties` 已配置）；公共依赖走阿里云/腾讯镜像（`build.gradle` 已配置）；Mojang 下载需代理。
 
+> ⚠️ 启动器开了**版本隔离**时，每个版本的 `gameDir` 是 `<.minecraft>/versions/<版本>/`，
+> mods 要放 `versions/<版本>/mods/`，不是 `.minecraft/mods/`。
+
 ## 使用方法
 
-1. 进游戏（26.2 Fabric，需安装 fabric-api）
+1. 进游戏（对应版本的 Fabric，需安装 fabric-api）
 2. 执行 `/summonmaid` 召唤女仆（出现在你脚下，显示"女仆"名称）
 3. 交互：空手右键 → 坐下/站起；给女仆穿戴装备
 4. 女仆会跟随你，自动走/跑/跳跃跨越障碍、沟壑、上 1 格高台
@@ -204,13 +216,19 @@ gradlew.bat build
 
 ## 数据存储
 
-- 女仆装备/物品栏：`<游戏目录>/config/smartmaid/maids/<玩家UUID>.dat`（NBT 压缩文件，自动读写）
-- 女仆设置：`<游戏目录>/config/smartmaid/settings/<玩家UUID>.json`（JSON，与玩家绑定，菜单修改自动保存）
+- **女仆装备 / 物品栏 / 任务队列**：`<存档>/smartmaid/maids/<玩家UUID>.dat`（NBT 压缩文件，自动读写）
+  —— **按存档隔离**，多存档互不串档；旧版 `config/smartmaid/maids/` 下的同名文件**首次读取时自动迁移**过来
+- **女仆设置**（与玩家绑定）：`<游戏目录>/config/smartmaid/settings/<玩家UUID>.json`（菜单修改自动保存）
+- **AI 任务配置**：`<游戏目录>/config/smartmaid/maids/<玩家UUID>.cfg`
+- **模组配置**：`<游戏目录>/config/smartmaid/main.json`（调试开关、命令权限、背包自动整理等；首次运行自动生成）
+- **模组自身错误**：`<游戏目录>/smartmaid/errors.jsonl`（JSON Lines，只含本模组；见 [`TEST_SYSTEM.md`](./TEST_SYSTEM.md)）
+
+> `<存档>` = `<游戏目录>/saves/<存档名>/`。开着**版本隔离**的启动器时，`<游戏目录>` = `.minecraft/versions/<版本>/`。
 
 ## 架构
 
 ```
-SmartMaid (Fabric 26.2)
+SmartMaid (Fabric 26.2 / 26.3)
 ├── SmartMaid              主类：注册实体 + 命令
 ├── init/ModEntities       实体类型注册（ResourceKey）+ 属性注册
 ├── command/SummonMaidCommand   /summonmaid 指令
@@ -298,10 +316,13 @@ tools/
 ├── launch_game.py         ★从 HMCL 日志提取启动命令 + 补 token + quickPlay
 └── run_e2e_test.py        ★一键端到端联调：起桌宠 → 起游戏 → 轮询 → 报告；含 --check-token
 config/smartmaid/
-├── autotest.json          ★代码层自动测试配置（JSON 指令数组，进游戏自动执行）
+├── main.json              ★模组配置（调试开关 / 命令权限 / 背包自动整理；首次自动生成）
 ├── bridge.json            ★M5 桌宠联动配置（遥测 + WS；首次自动生成）
-└── maids/<UUID>.dat      背包/装备存档；.cfg AI 任务配置
-    settings/<UUID>.json  ★玩家绑定设置（女仆菜单修改自动保存）
+├── autotest.json          ★代码层自动测试配置（JSON 指令数组，进游戏自动执行）
+├── clienttest.json        ★客户端自动化测试脚本（GUI / 键位，进世界后自动执行）
+├── settings/<UUID>.json   ★玩家绑定设置（女仆菜单修改自动保存）
+└── maids/<UUID>.cfg         AI 任务配置（持久化任务）
+<存档>/smartmaid/maids/<UUID>.dat   ★背包 / 装备 / 任务队列存档（按存档隔离；旧 config 位置自动迁移）
 ```
 
 ## 工具脚本
@@ -371,8 +392,9 @@ python tools/run_e2e_test.py --quick-play "新的世界 (11)"
 
 ## 开发记录
 
-- 开发中踩过的坑与复盘：参见 [`DEVELOPMENT_ISSUES.md`](./DEVELOPMENT_ISSUES.md)（含"玩家式移动改造"失败教训、26.2 速度机制、跳跃物理/寻路/解表的完整坑）
-- **代码层自动化测试**：26.2 单机（集成服务器）不支持 RCON，自动化测试用 `MaidAutoTest`——写 `config/smartmaid/autotest.json`（JSON 指令数组）进游戏自动执行，结果在 `logs/latest.log` 搜 `[SmartMaid-Debug] AutoTest`，执行完配置自动改名为 `autotest.done.json`
+- 开发中踩过的坑与复盘：参见 [`DEVELOPMENT_ISSUES.md`](./DEVELOPMENT_ISSUES.md)（含"玩家式移动改造"失败教训、26.2 速度机制、跳跃物理/寻路/解表、**26.3 多版本适配的 8 个坑**）
+- **代码层自动化测试（服务端）**：26.2 单机（集成服务器）不支持 RCON，自动化测试用 `MaidAutoTest`——写 `config/smartmaid/autotest.json`（JSON 指令数组）进游戏自动执行，结果在 `logs/latest.log` 搜 `AutoTest`（走 `SmartMaid.LOGGER`，**不是** `[SmartMaid-Debug]` 前缀；后者是行为诊断日志，由 `main.json.debug` 控制），执行完配置自动改名为 `autotest.done.json`
+- **客户端 / 静态自动化（2026-10-07 新增）**：`python tools/clienttest.py run|report|errors --series <版本>` 自动走完菜单与背包的完整操作链路（**文件驱动、不碰鼠标键盘**，结果落 `clienttest.report.json`）；`python tools/verify_all.py --series <版本>` 一条命令跑完「编译 + Mixin 注入点 + 第三方依赖」三套静态检查。模组自身异常另落 `<游戏目录>/smartmaid/errors.jsonl`。详见 [`TEST_SYSTEM.md`](./TEST_SYSTEM.md)
 - **日志分层（不污染日志）**：周期性/每帧高频日志（感知快照、装备、Monitor、渲染、挖矿/烧炼进度）全部走 `MaidDebug.verbose()` 门控（默认关）；仅事件性日志默认输出。感知快照全量 5-6KB/条，曾让数百小时游戏累积数 GB 的 `latest.log`。
 
 ## 参考项目

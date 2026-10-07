@@ -1183,3 +1183,90 @@ M5 双向链路（感知下行 + 指令上行）+ M-P1 增量 diff 全部通过�
 
 完整排查过程（三轮错误 + 真机证据）见 `docs/ISSUES_TREE_AND_INVENTORY.md` §二。
 
+## 2026-10-07：多版本兼容（26.3 支持）踩坑复盘（重要）
+
+> 目标：让模组兼容 26.1 / 26.2 / 26.3。方案与逐轮结论见 `DESIGN_MULTIVERSION.md`。
+> 本轮最大的产出不是代码，而是**一套能提前发现问题的核验方法**——下面每个坑都对应一个工具。
+
+### 坑 1：只跑「编译 + 依赖核验」会给出**虚假的干净结论**（最重要的教训）
+
+- **现象**：编译 0 错误、第三方依赖核验"只差 2 个成员"→ 判定"26.3 迁移工作量很小"→ **真机一启动就崩**。
+- **根因**：三层静态检查**互相看不见对方的东西**——
+  编译器看不见 **Mixin 注解**（`@Mixin/@At` 里的目标字符串不是普通常量池引用）；
+  依赖核验看不见 **Mixin 注入点**；两者都看不见**运行期才命中的签名变更**。
+- **修复**：新增 `tools/check_mixin_targets.py`（解析 class 文件里 `@Mixin` 目标与 `@At` 注入点，分级 致命/警告），
+  并用 `tools/verify_all.py` 把「编译 + Mixin + 依赖」串成一条命令，**三套必须一起跑**。
+- **教训**：**"静态全绿"不等于"能跑"，只等于"我检查的那几层没问题"。检查的层数与覆盖面要显式写出来。**
+
+### 坑 2：`javac` 遇到错误会**中止** —— "编译检查 0 错误"和"能打出完整包"是两件事
+
+- **现象**：126 个源文件只产出 **1 个 class**；工具报"0 error"但产物不可用。
+- **根因**：`javac` 是**fail-fast** 的，报错即停，只留下中止前已生成的 class。
+  而 Fabric 的 **classtweaker/access widener** 开放的 vanilla 成员（`MenuType` 构造、`MenuScreens.register`、
+  `BlockPlaceContext` 构造）在不应用 CT 时会报 `has private access` —— 对 javac 而言是**硬错误**，于是直接停。
+- **修复**：`compile_check.py` 改成**两趟编译**：第一趟暴露访问错 → 从 Fabric 的 classtweaker 里取出对应条目 →
+  生成一个**编译用补丁 jar**（字节码层面把那些成员改成 public，含嵌套类型的 `InnerClasses` 属性）→ 放 classpath 最前再编一次。
+  补丁 jar **只用于编译**，运行时 Fabric 自己会应用 CT。
+- **教训**：**"工具说通过"要能解释"它凭什么说通过"**；顺带确认：**26.3 起 `.accesswidener` 改名 `.classtweaker`**。
+
+### 坑 3：第三方依赖的兼容性核验，**必须处理常量池的真正来源**
+
+- **现象**：写好的依赖核验工具对"已知能用的组合"也报错（基线不干净）。
+- **根因**：三个 bug —— ① `Methodref` 的 owner 常是**静态接收者类型**（`avatar.getHealth()` 的 owner 是 `Avatar`，
+  方法却在 `LivingEntity`）→ 必须沿父类链解析；② 构造器在字节码里叫 `<init>`，而 javap 打印类名；
+  ③ `<mc>/libraries` 是一堆 jar，全塞进 classpath 会**超 Windows 命令行长度上限** → 只能按需把"装着该类的那个 jar"加进去。
+- **修复**：`check_dep_compat.py`；并**先跑基线**（依赖 vs 它自己支持的版本）确认工具本身可信。
+- **教训**：**核验工具必须先跑基线** —— 基线不干净，说明是工具错了，不是依赖错了。
+
+### 坑 4：类存在性判定**不能整个目录当索引**（会混进别的 MC 版本）
+
+- **现象**：Mixin 核验工具把"26.3 已删除的类"判成"存在"，漏报了真正会崩的那条。
+- **根因**：`<.minecraft>/libraries` 里躺着 **NeoForge 21.1.51 的 `client-1.21.1-srg.jar`**（HMCL 装的），
+  它含 26.3 已删的 `ItemInHandRenderer` → 整目录建索引把"已删"判成"存在"。
+- **修复**：**类存在性只信目标版本自己那个 jar**。
+- **教训**：**"某类存在吗"这个问题，答案取决于问的是哪个版本**；索引范围要在工具里写死并注释原因。
+
+### 坑 5：26.3 **GLFW → SDL**，键盘与鼠标的键值编码**整套都变了**
+
+- **现象 ①**：`Shift + E` 打不开背包 —— 完全没反应，无报错。
+  **现象 ②**：主菜单**能**打开，但**里面点哪都没反应**（极易误判成"二级页打不开"）。
+- **根因**：26.3 换用 SDL，**键值不是同一套编码**：
+  `KEY_E` 69→**8**、`KEY_LSHIFT/RSHIFT` 340/344→**225/229**、**鼠标左键 0→1**（右键 1→3，中键 2→2）。
+  工程用 `GLFW.GLFW_KEY_E`（=69）当 scancode 读 → 实际绑到无关键；
+  `mouseClicked` 里 `if (event.button() != 0) return;` → **26.3 左键是 1，所有左键被当非左键丢掉**。
+- **证据（字节码级）**：`26.3.jar` 引用 `org/lwjgl/glfw/GLFW` 的类 = **0**，引用 `org/lwjgl/sdl/SDL` = **27**；
+  vanilla `Options` 给 `key.forward` 用 `bipush 26`（`SDL_SCANCODE_W`）；`SDLEventHandler` 直接把 `SDL_MouseButtonEvent.button()` 塞进 `MouseButtonInfo`。
+- **修复**：键盘统一用 **`InputConstants.KEY_*`**（两版**同名**、值各自正确 → **不需要 compat 分支**）；
+  鼠标左键走 `MaidCompat.isPrimaryMouseButton(int)`。`Type`（`KEYSYM`→`KEYBOARD`）与 `isKeyDown` 的 `Window` 参数才需要版本分支。
+- **教训**：**"换了底层库"这类变更不会报错，只会"没反应"**。判断依据要看 jar 里到底引了谁，不要看文档。
+
+### 坑 6：`Screen` 里直接发包 → 退出世界即崩
+
+- **现象**：`IllegalStateException: Cannot send packets when not in game!`，栈指向 `MaidMenuScreen.tick()`。
+- **根因**：`Screen.tick()` 由 `Gui.tick()` 持续驱动，**不检查连接**；GUI 里 18 处发包都没判连接。
+- **修复**：新增 `client/gui/MaidNet.send(...)`，**无连接静默丢弃**，GUI 内发包统一走它。
+- **教训**：**能在"离线状态"被驱动的代码（Screen / 渲染 / 输入回调），任何对外发送都要先判连接。**
+
+### 坑 7：jar-in-jar 的 `jars` 声明是 **Loom 注入的**，源码里没有
+
+- **现象**：自研打包路径产出的 jar 启动报"需要 player_animation_library，但没有安装"——而它其实就躺在包里。
+- **根因**：`src/main/resources/fabric.mod.json` **不含 `jars` 数组**，那是 Loom 打包时按 `include` 配置**注入**的。
+- **修复**：打包逻辑改成解析 JSON、按 `--include-jar` 自动注入 `jars`；并**拿真实 Loom 产物的 `fabric.mod.json` 逐字段对照**（修完零差异）。
+- **教训**：**自研打包路径必须与官方产物的元数据逐字段比对**——这类缺失静态三层全查不出，只有真机加载才暴露。
+
+### 坑 8：第三方库元数据的**版本上界**决定了失败发生在"启动"还是"用到时"
+
+- **现象**：PAL 1.2.6 的 Mixin 在 26.3 应用失败 → 启动即崩（`Critical injection failure`）。
+- **根因**：PAL 元数据写的是 `minecraft: ">=26.2"`（**无上界**），Loader 照单放行；
+  而它的 `mixins.json` 是 `required=true` + `injectors.defaultRequire=1` → 注入失败**直接致命**。
+- **修复**：换官方 **1.2.7+mc.26.3**（`minecraft: ">=26.3"`、`fabricloader: ">=0.19.5"`，本机正好对上）。
+  连带发现 1.2.7 把内嵌 mocha 的包名从 `team.unnamed.mocha` 换成 `org.redlance.mocha`（`MochaEngine` → `MolangInterpreter`，纯改名），
+  已加 `compat/MaidAnimCompat.createEngine(...)` 隔离。
+- **教训**：**第三方二进制是版本兼容的硬天花板**；引入前先看它的版本上界与 Mixin 是否 required，
+  并**静态核验它的 Mixin 目标与注入点**（`check_mixin_targets.py`）。
+
+### 方法学总结（本轮最该继承的）
+
+1. **多版本差异以编译器枚举为准**，人工挑类 diff 只能用来预判和解释（本轮人工 diff 漏了 `isKeyDown` 签名与 `FuelValues` 整类删除）。
+2. **改完必须双向验证**：新版本通过 + **老版本不回归**（本轮 26.2/26.3 各 0 真实错误）。
+3. **接管器的"未验证项"要逐条标出来**，别用"整体通过"盖住分支盲区（如"有女仆的路径"在自动化里根本没走到）。

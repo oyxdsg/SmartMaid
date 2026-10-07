@@ -251,11 +251,12 @@ public class SmeltTask extends MaidAITask implements Resumable {
         if (!(maid.level() instanceof ServerLevel level)) {
             return ItemStack.EMPTY;
         }
-        net.minecraft.world.level.block.entity.FuelValues fuelValues = level.fuelValues();
         SimpleContainer inv = maid.getMaidInventory();
         for (int s = 0; s < inv.getContainerSize(); s++) {
             ItemStack stack = inv.getItem(s);
-            if (!stack.isEmpty() && fuelValues.isFuel(stack)) {
+            // 「怎么判燃料」是版本敏感的：26.2 用 Level#fuelValues()，26.3 删掉它改用物品组件
+            // → 走版本差异隔离层
+            if (com.oyxdsg.smartmaid.compat.MaidCompat.isFuel(level, stack)) {
                 return stack;
             }
         }

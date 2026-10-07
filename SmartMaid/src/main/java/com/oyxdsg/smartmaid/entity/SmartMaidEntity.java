@@ -587,9 +587,9 @@ public class SmartMaidEntity extends TamableAnimal implements ContainerUser {
         if (this.level().isClientSide()) {
             // 客户端：推进女仆动作动画 tick（/maidanim 播放的 Emotecraft 动作）
             com.oyxdsg.smartmaid.client.animation.MaidAnimManager.tick(this);
-            // 26.2：updateSwingTime 只在 Monster/Player 子类的 aiStep 里被调用，普通 Mob（含女仆）
-            // 挥动动画不自动推进 → 手动补推进，让挖掘/攻击挥动可见
-            this.tickSwingAnim();
+            // 挥动动画推进：怎么做是版本敏感的
+            //（26.2 要手动补推进；26.3 原版已统一处理）→ 走版本差异隔离层
+            com.oyxdsg.smartmaid.compat.MaidCompat.tickSwingAnim(this);
         } else {
             // L0 本地安全层：每 tick 硬编码规则评估，优先级最高
             this.applySafetyRules();
@@ -654,49 +654,10 @@ public class SmartMaidEntity extends TamableAnimal implements ContainerUser {
         }
     }
 
-    /**
-     * 手动推进挥动动画（客户端专用）。
-     *
-     * <p>26.2 的 {@link LivingEntity#updateSwingTime()} 只在 {@code Monster}/{@code Player}
-     * 子类的 {@code aiStep} 里被调用，普通 Mob（含女仆）收到挥动动画包后
-     * {@code attackAnim} 永远不会推进 → 挖掘/攻击挥动看不见。这里在客户端 aiStep
-     * 里手动复制原版推进逻辑（{@code oAttackAnim} 由 {@code baseTick} 自动更新，插值正常）。
-     * 挥动时长 {@code getCurrentSwingDuration()} 是 private，用反射取（含物品时长/挖掘加速）。</p>
-     */
-    private static final java.lang.reflect.Method SWING_DURATION_METHOD;
-
-    static {
-        java.lang.reflect.Method m = null;
-        try {
-            m = LivingEntity.class.getDeclaredMethod("getCurrentSwingDuration");
-            m.setAccessible(true);
-        } catch (NoSuchMethodException ignored) {
-        }
-        SWING_DURATION_METHOD = m;
-    }
-
-    private void tickSwingAnim() {
-        int duration = 6;
-        if (SWING_DURATION_METHOD != null) {
-            try {
-                duration = (int) SWING_DURATION_METHOD.invoke(this);
-            } catch (Exception ignored) {
-            }
-        }
-        if (duration <= 0) {
-            duration = 6;
-        }
-        if (this.swinging) {
-            this.swingTime++;
-            if (this.swingTime >= duration) {
-                this.swingTime = 0;
-                this.swinging = false;
-            }
-        } else {
-            this.swingTime = 0;
-        }
-        this.attackAnim = (float) this.swingTime / (float) duration;
-    }
+    // 客户端挥动动画的推进逻辑已移到「版本差异隔离层」：com.oyxdsg.smartmaid.compat.MaidCompat
+    //   - 26.2：原版只在 Monster/Player 的 aiStep 里推进挥动，普通 Mob 需要手动补（反射取挥动时长 + 直写字段）
+    //   - 26.3：原版改用 SwingState 统一处理，那批字段已被删除 → 不再需要本 hack
+    // 放在 compat 层是因为「怎么写」本身是版本敏感的，共享代码不该知道这件事。
 
     /**
      * L0 — 本地安全规则（物理级硬编码，断网/无 AI 也生效）。

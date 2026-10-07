@@ -61,7 +61,7 @@ public class ChestOpenTask extends MaidAITask {
         maid.getNavigation().stop();
         // 面朝箱子 + 女仆开箱动作
         maid.getLookControl().setLookAt(this.target.getX() + 0.5D, this.target.getY() + 0.5D, this.target.getZ() + 0.5D);
-        maid.swing(InteractionHand.MAIN_HAND);
+        com.oyxdsg.smartmaid.compat.MaidCompat.swing(maid, InteractionHand.MAIN_HAND);
         // 触发真实开箱动画（openCount 机制，客户端箱子盖打开）
         BlockEntity be = maid.level().getBlockEntity(this.target);
         if (be instanceof ChestBlockEntity chest) {

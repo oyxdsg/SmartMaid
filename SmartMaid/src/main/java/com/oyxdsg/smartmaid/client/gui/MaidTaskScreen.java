@@ -8,7 +8,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.oyxdsg.smartmaid.network.MaidMenuActionPayload;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -71,7 +70,7 @@ public class MaidTaskScreen extends MaidSubScreen {
         super.tick();
         if (++this.queryTimer >= 20) {
             this.queryTimer = 0;
-            ClientPlayNetworking.send(MaidMenuActionPayload.of("query"));
+            MaidNet.send(MaidMenuActionPayload.of("query"));
         }
     }
 
@@ -113,9 +112,9 @@ public class MaidTaskScreen extends MaidSubScreen {
         int by = this.top + PANEL_H - 26;
         int bw = 84;
         button(ex, this.left + 16, by, bw, "清空短期", () ->
-                ClientPlayNetworking.send(MaidMenuActionPayload.op("clear", "", "SHORT")));
+                MaidNet.send(MaidMenuActionPayload.op("clear", "", "SHORT")));
         button(ex, this.left + 16 + bw + 8, by, bw, "清空长期", () ->
-                ClientPlayNetworking.send(MaidMenuActionPayload.op("clear", "", "LONG")));
+                MaidNet.send(MaidMenuActionPayload.op("clear", "", "LONG")));
         button(ex, this.left + PANEL_W - 16 - bw, by, bw, "＋ 添加任务", () ->
                 this.minecraft.setScreenAndShow(new MaidAddTaskScreen(this, this.state)));
 
@@ -146,24 +145,24 @@ public class MaidTaskScreen extends MaidSubScreen {
         if (isCurrent) {
             bx -= 56;
             button(ex, bx, y, 52, "停止这一项", () ->
-                    ClientPlayNetworking.send(MaidMenuActionPayload.of("cancelCurrent")));
+                    MaidNet.send(MaidMenuActionPayload.of("cancelCurrent")));
         } else if (isLong) {
             bx -= 34;
             button(ex, bx, y, 30, "停止", () ->
-                    ClientPlayNetworking.send(MaidMenuActionPayload.op("stop", id, "LONG")));
+                    MaidNet.send(MaidMenuActionPayload.op("stop", id, "LONG")));
             bx -= 34;
             button(ex, bx, y, 30, "设当前", () ->
-                    ClientPlayNetworking.send(MaidMenuActionPayload.op("promote", id, "LONG")));
+                    MaidNet.send(MaidMenuActionPayload.op("promote", id, "LONG")));
             bx -= 26;
             button(ex, bx, y, 22, "↑", () ->
-                    ClientPlayNetworking.send(MaidMenuActionPayload.op("moveUp", id, "LONG")));
+                    MaidNet.send(MaidMenuActionPayload.op("moveUp", id, "LONG")));
         } else {
             bx -= 26;
             button(ex, bx, y, 22, "×", () ->
-                    ClientPlayNetworking.send(MaidMenuActionPayload.op("remove", id, "SHORT")));
+                    MaidNet.send(MaidMenuActionPayload.op("remove", id, "SHORT")));
             bx -= 26;
             button(ex, bx, y, 22, "↑", () ->
-                    ClientPlayNetworking.send(MaidMenuActionPayload.op("moveUp", id, "SHORT")));
+                    MaidNet.send(MaidMenuActionPayload.op("moveUp", id, "SHORT")));
         }
     }
 
@@ -203,7 +202,7 @@ public class MaidTaskScreen extends MaidSubScreen {
         ex.text(this.font, Component.literal(label), this.left + 22, y + 4, MaidTheme.TEXT);
         int bx = this.left + PANEL_W - 16 - 4 - 60;
         button(ex, bx, y, 56, "整组停止", () ->
-                ClientPlayNetworking.send(MaidMenuActionPayload.op("stopGroup", groupId, "")));
+                MaidNet.send(MaidMenuActionPayload.op("stopGroup", groupId, "")));
     }
 
     private void button(GuiGraphicsExtractor ex, int x, int y, int w, String label, Runnable action) {
@@ -225,7 +224,7 @@ public class MaidTaskScreen extends MaidSubScreen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean focused) {
-        if (event.button() == 0) {
+        if (com.oyxdsg.smartmaid.compat.MaidCompat.isPrimaryMouseButton(event.button())) {
             for (Hot h : this.hots) {
                 if (inside(event.x(), event.y(), h.x(), h.y(), h.w(), h.h())) {
                     h.action().run();

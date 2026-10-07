@@ -1,0 +1,48 @@
+{
+  "name": "gui-chain",
+  "desc": "GUI 打开链路自检：主菜单 → 各二级页 → 返回 → 高频动作 → 背包入口。全程合成屏幕坐标点击，不碰真实鼠标键盘。",
+  "_howto": "python tools/clienttest.py run gui-chain   （然后进游戏即可自动跑）",
+  "cases": [
+    { "id": "key.registration", "op": "assertKeyMapping", "expect": "key.keyboard.e",
+      "_why": "验证 OPEN_INVENTORY 注册的默认键就是 E。26.3 用 GLFW 键值会注册成完全无关的键 → 按键像没反应。" },
+
+    { "id": "menu.open", "op": "openMenu", "maidId": -1, "food": 20,
+      "_why": "等价于服务端发 MaidOpenMenuPayload 后客户端做的事（setScreenAndShow）。maidId=-1 表示不依赖场上有女仆。" },
+    { "id": "menu.assert", "op": "assertScreen", "expect": "MaidMenuScreen" },
+
+    { "id": "entry.task", "op": "clickEntry", "index": 0 },
+    { "id": "entry.task.assert", "op": "assertScreen", "expect": "MaidTaskScreen" },
+    { "id": "task.query", "op": "wait", "ticks": 10 },
+    { "id": "task.back", "op": "clickBack" },
+    { "id": "task.back.assert", "op": "assertScreen", "expect": "MaidMenuScreen" },
+
+    { "id": "entry.settings", "op": "clickEntry", "index": 3 },
+    { "id": "entry.settings.assert", "op": "assertScreen", "expect": "MaidSettingsScreen" },
+    { "id": "settings.back", "op": "clickBack" },
+    { "id": "settings.back.assert", "op": "assertScreen", "expect": "MaidMenuScreen" },
+
+    { "id": "entry.anim", "op": "clickEntry", "index": 4 },
+    { "id": "entry.anim.assert", "op": "assertScreen", "expect": "MaidPlaceholderScreen" },
+    { "id": "anim.back", "op": "clickBack" },
+    { "id": "anim.back.assert", "op": "assertScreen", "expect": "MaidMenuScreen" },
+
+    { "id": "entry.chat", "op": "clickEntry", "index": 2 },
+    { "id": "entry.chat.assert", "op": "assertScreen", "expect": "MaidPlaceholderScreen" },
+    { "id": "chat.back", "op": "clickBack" },
+    { "id": "chat.back.assert", "op": "assertScreen", "expect": "MaidMenuScreen" },
+
+    { "id": "action.0", "op": "clickAction", "index": 0 },
+    { "id": "action.1", "op": "clickAction", "index": 1 },
+    { "id": "action.2", "op": "clickAction", "index": 2 },
+    { "id": "action.3", "op": "clickAction", "index": 3 },
+    { "id": "action.stay", "op": "assertScreen", "expect": "MaidMenuScreen",
+      "_why": "高频动作只是发指令 + toast，不应切屏。" },
+
+    { "id": "key.invokeOpenInv", "op": "invokeOpenInventory",
+      "_why": "直接跑 Shift+E 的处理逻辑。false 表示此刻没有真的按住 Shift（输入状态），不是缺陷。" },
+
+    { "id": "entry.inventory", "op": "clickEntry", "index": 1, "_why": "最后点背包入口：它会发指令并关屏。" },
+    { "id": "settle", "op": "wait", "ticks": 20 },
+    { "id": "done", "op": "note", "msg": "GUI 链路测试结束（结束时 Screen 由服务端是否开容器决定，故不在此断言）" }
+  ]
+}

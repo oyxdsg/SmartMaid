@@ -28,6 +28,10 @@ public class SmartMaid implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        // 错误接收通道：未捕获异常 + 主动上报 → <gameDir>/smartmaid/errors.jsonl（含服务端）
+        com.oyxdsg.smartmaid.test.MaidErrorSink.setFallbackLogger(
+                (msg, err) -> LOGGER.warn(msg, err));
+        com.oyxdsg.smartmaid.test.MaidErrorSink.install("server");
         ModEntities.register();
         ModMenus.register();
         ModNetworking.register();

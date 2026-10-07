@@ -6,7 +6,6 @@ import java.util.List;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.oyxdsg.smartmaid.network.MaidMenuActionPayload;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -154,7 +153,7 @@ public class MaidAddTaskScreen extends MaidSubScreen {
                 p.add("pos", a);
             }
         }
-        ClientPlayNetworking.send(MaidMenuActionPayload.enqueue(q.cmd(), p.toString()));
+        MaidNet.send(MaidMenuActionPayload.enqueue(q.cmd(), p.toString()));
         goBack();
     }
 
@@ -183,7 +182,7 @@ public class MaidAddTaskScreen extends MaidSubScreen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean focused) {
-        if (event.button() == 0) {
+        if (com.oyxdsg.smartmaid.compat.MaidCompat.isPrimaryMouseButton(event.button())) {
             for (Hot h : this.hots) {
                 if (inside(event.x(), event.y(), h.x(), h.y(), h.w(), h.h())) {
                     h.action().run();

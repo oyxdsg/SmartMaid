@@ -3,7 +3,7 @@
   "id": "smartmaid",
   "version": "${version}",
   "name": "Smart Maid",
-  "description": "Rule-engine driven AI maid mod for Minecraft 26.2, inspired by Touhou Little Maid.",
+  "description": "Rule-engine driven AI maid mod for Minecraft ${target_mc}, inspired by Touhou Little Maid.",
   "authors": ["oyxdsg"],
   "license": "MIT",
   "icon": "assets/smartmaid/icon.png",
@@ -14,10 +14,10 @@
   },
   "depends": {
     "fabricloader": ">=0.18.4",
-    "minecraft": "~26.2",
+    "minecraft": "${minecraft_range}",
     "java": ">=25",
-    "fabric-api": ">=0.158.0+26.2",
-    "player_animation_library": ">=1.2.6"
+    "fabric-api": "${fabric_api_range}",
+    "player_animation_library": "${pal_range}"
   },
   "suggests": {
     "modmenu": "*"

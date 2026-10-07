@@ -1,6 +1,7 @@
 package com.oyxdsg.smartmaid.client.animation;
 
 import com.oyxdsg.smartmaid.SmartMaid;
+import com.oyxdsg.smartmaid.compat.MaidAnimCompat;
 import com.oyxdsg.smartmaid.entity.SmartMaidEntity;
 import com.zigythebird.playeranimcore.animation.Animation;
 import com.zigythebird.playeranimcore.animation.AnimationController;
@@ -94,7 +95,10 @@ public final class MaidAnimManager {
     private static HumanoidAnimationController getController(SmartMaidEntity maid) {
         return CONTROLLERS.computeIfAbsent(maid.getId(), k -> new HumanoidAnimationController(
                 (controller, data, setter) -> PlayState.CONTINUE,
-                c -> team.unnamed.mocha.MochaEngine.create(c)
+                // 表达式引擎由版本隔离层提供：PAL 1.2.6 = MochaEngine，
+                // PAL 1.2.7 = MolangInterpreter（包名也换了）。此处不引用任何一侧的类型，
+                // 由 MaidAnimCompat.createEngine 的返回类型与当版本的构造器相匹配。
+                c -> MaidAnimCompat.createEngine(c)
         ));
     }
 

@@ -5,7 +5,6 @@ import com.google.gson.JsonParser;
 import com.oyxdsg.smartmaid.entity.SmartMaidEntity;
 import com.oyxdsg.smartmaid.network.MaidCommandPayload;
 import com.oyxdsg.smartmaid.network.MaidMenuActionPayload;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -93,7 +92,7 @@ public class MaidMenuScreen extends Screen {
         super.tick();
         if (++this.queryTimer >= 20) {
             this.queryTimer = 0;
-            ClientPlayNetworking.send(MaidMenuActionPayload.of("query"));
+            MaidNet.send(MaidMenuActionPayload.of("query"));
         }
     }
 
@@ -236,7 +235,7 @@ public class MaidMenuScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean focused) {
-        if (event.button() != 0) {
+        if (!com.oyxdsg.smartmaid.compat.MaidCompat.isPrimaryMouseButton(event.button())) {
             return super.mouseClicked(event, focused);
         }
         double mx = event.x();
@@ -293,11 +292,28 @@ public class MaidMenuScreen extends Screen {
         return mx >= x && mx < x + w && my >= y && my < y + h;
     }
 
+    /**
+     * **测试注入口**：第 {@code i} 个入口按钮的矩形 {@code {x,y,w,h}}（越界返回 {@code null}）。
+     *
+     * <p>本屏是纯自绘 + 手动命中测试，没有 widget 可以让测试框架去点。暴露矩形是为了让
+     * 客户端自动化测试能<b>合成一个屏幕坐标点击</b>（{@code screen.mouseClicked(...)}，
+     * 不经过真实输入设备），从而真正验证命中判定与分发，而不是只测 {@code onEntry}。
+     * 生产路径不调用它。</p>
+     */
+    public int[] entryRectForTest(int i) {
+        return i >= 0 && i < entryX.length ? new int[]{entryX[i], entryY[i], entryW[i], entryH[i]} : null;
+    }
+
+    /** **测试注入口**：第 {@code i} 个高频动作按钮的矩形（越界返回 {@code null}）。 */
+    public int[] actionRectForTest(int i) {
+        return i >= 0 && i < actX.length ? new int[]{actX[i], actY[i], actW[i], actH[i]} : null;
+    }
+
     private void onEntry(int i) {
         switch (i) {
             case 0 -> this.minecraft.setScreenAndShow(new MaidTaskScreen(this, this.state));
             case 1 -> {
-                ClientPlayNetworking.send(new MaidCommandPayload(MaidCommandPayload.ACTION_OPEN_INVENTORY));
+                MaidNet.send(new MaidCommandPayload(MaidCommandPayload.ACTION_OPEN_INVENTORY));
                 this.onClose();
             }
             case 2 -> this.minecraft.setScreenAndShow(new MaidPlaceholderScreen(this, "对话"));
@@ -328,7 +344,7 @@ public class MaidMenuScreen extends Screen {
                 showToast("已召回");
             }
             case 3 -> {
-                ClientPlayNetworking.send(MaidMenuActionPayload.of("cancelCurrent"));
+                MaidNet.send(MaidMenuActionPayload.of("cancelCurrent"));
                 showToast("已停止当前任务");
             }
             default -> {
@@ -337,7 +353,7 @@ public class MaidMenuScreen extends Screen {
     }
 
     private void sendCmd(int action) {
-        ClientPlayNetworking.send(new MaidCommandPayload(action));
+        MaidNet.send(new MaidCommandPayload(action));
     }
 
     private void showToast(String s) {

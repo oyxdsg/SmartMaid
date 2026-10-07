@@ -29,11 +29,13 @@
 | 项 | 状态 |
 |---|---|
 | 设计 | ✅ 定稿（两份文档，见 §三） |
-| 代码 | ✅ **已实现**（2026-10-01；队列 Q1–Q9 + 菜单 N1；见顶部实现进度） |
-| 版本 | `0.1.1`（`main` 公开）；开发史在 `master` |
+| 代码 | ✅ **已实现**（2026-10-01 真机验收；队列 Q1–Q9 + 菜单 N1；见顶部实现进度） |
+| 版本 | `0.1.3`（`main` 公开）；开发史在 `master` |
 | 现有实现 | 新菜单 `MaidMenuScreen`（Shift+右键，纯 Screen）+ 双队列任务系统；旧 `MaidControlScreen` 保留但不再是入口 |
 
-> ⚠️ **别在真机上找"新菜单"** —— 它还不存在。
+> ℹ️ 本文件写于**动工前**，§四 的「不变量 / 已拍板决策」仍是权威口径；
+> 但 **§一 / §二 / §五 里"待做、还不存在"的表述已过期** —— 实际交付状态以
+> `HANDOVER.md` §二（2026-10-01、2026-10-07 两节）与 `CHANGELOG.md` 为准。
 
 ---
 
@@ -112,8 +114,11 @@ export PATH="<PortableGit 目录>/usr/bin:<PortableGit 目录>/mingw64/bin:$PATH
 export JAVA_HOME="<你的 JDK 25 安装目录>"
 cd SmartMaid && ./gradlew build -x test --console=plain
 
-# 2) 部署
-cp build/libs/smartmaid-0.1.2.jar "<你的游戏目录>/.minecraft/mods/"
+# 2) 部署（⚠️ 启动器开了版本隔离：26.3 的 mods 在 .minecraft/versions/26.3/mods/）
+cp build/libs/smartmaid-0.1.3.jar "<你的游戏目录>/.minecraft/mods/"
+
+# 2b) 静态回归总门（改完代码/升依赖后必跑）
+python tools/verify_all.py --series 26.2
 
 # 3) 自动化测试（无需 GUI/RCON）
 #    写/复制 tools/autotest.modpack-compat.json → <game>/config/smartmaid/autotest.json

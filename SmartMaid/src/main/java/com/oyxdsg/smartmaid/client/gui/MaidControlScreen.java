@@ -4,7 +4,6 @@ import com.oyxdsg.smartmaid.SmartMaid;
 import com.oyxdsg.smartmaid.gui.MaidControlMenu;
 import com.oyxdsg.smartmaid.network.MaidCommandPayload;
 import com.oyxdsg.smartmaid.network.MaidSettingsPayload;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.StringWidget;
@@ -119,13 +118,13 @@ public class MaidControlScreen extends AbstractContainerScreen<MaidControlMenu> 
         int current = this.menu.getSetting(row.dataIndex());
         int next = (current + 1) % row.values().length;
         if (this.minecraft != null && this.minecraft.player != null) {
-            ClientPlayNetworking.send(new MaidSettingsPayload(row.field(), next));
+            MaidNet.send(new MaidSettingsPayload(row.field(), next));
         }
     }
 
     private void send(int action) {
         if (this.minecraft != null && this.minecraft.player != null) {
-            ClientPlayNetworking.send(new MaidCommandPayload(action));
+            MaidNet.send(new MaidCommandPayload(action));
         }
     }
 

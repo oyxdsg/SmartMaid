@@ -180,7 +180,7 @@ public final class CraftExecutor {
                 }
             }
             inv.setChanged();
-            maid.swing(InteractionHand.MAIN_HAND);
+            com.oyxdsg.smartmaid.compat.MaidCompat.swing(maid, InteractionHand.MAIN_HAND);
             ItemStack left = MaidActions.storeToBackpack(maid, result.out());
             if (!left.isEmpty()) {
                 maid.spawnAtLocation(level, left); // 背包满则掉地上

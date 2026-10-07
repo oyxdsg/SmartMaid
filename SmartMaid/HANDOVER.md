@@ -23,7 +23,32 @@
 
 > ⚠️ 曾尝试"玩家式移动改造"（自写 A\* + 手动 velocity + 覆盖 travel），多轮失败后回退到原版体系。**坑与教训见 `DEVELOPMENT_ISSUES.md`，务必先读。**
 
-## 二、当前进度（最近更新：2026-09-29）
+## 二、当前进度（最近更新：2026-10-07）
+
+### 已完成（2026-10-07：多版本兼容 —— Minecraft 26.3 支持 + 测试体系）✅ 真机验证
+
+> 方案全文见 **[`DESIGN_MULTIVERSION.md`](./DESIGN_MULTIVERSION.md)**（版本矩阵 / 逐版差异清单 / 单 jar 可行性论证 / 逐轮真机结论）；
+> 测试体系见 **[`TEST_SYSTEM.md`](./TEST_SYSTEM.md)**；踩坑复盘见 `DEVELOPMENT_ISSUES.md` §2026-10-07。
+
+**做法**：一份源码 + 按版本切构建（`gradle.properties` 的 `mc_series`，**默认 26.2，现有开发流不变**）。
+共享代码留在 `src/main/java`，版本专属代码在 `src/mc<series>/java`，版本差异收敛到 `compat/MaidCompat`（每版本一份同名类、签名一致）。
+
+| 项 | 结论 |
+|---|---|
+| 构建骨架 | **26.1 起游戏完全去混淆**（Loom 换 `net.fabricmc.fabric-loom`、无 mappings、要 Java 25）→ 26.1/26.2/26.3 三线**同构**，只差版本属性 |
+| 产物形态 | **一版本一 jar**，各自声明窄 `minecraft` 范围。禁止宽范围通吃：Fabric **不做 mod 版本握手**，协议 775/776/777 不同会静默网络失败 |
+| 26.3 真实差异 | 编译器枚举 **21 处 / 7 文件**：`swing(InteractionHand)` 删除、挥动字段删除、`FuelValues` **整类删除**、`isKeyDown` 签名、`InputConstants.Type.KEYSYM`→`KEYBOARD` |
+| 输入层 | 26.3 **GLFW → SDL**，键盘与鼠标**键值编码整套都变**（`KEY_E` 69→8、鼠标左键 **0→1**）→ 自绘菜单点击全部失效；已改走 `MaidCompat`（`InputConstants.KEY_*` 两版同名，无需分支） |
+| 第三方库 | 内嵌 **PAL** 元数据是 `minecraft: ">=26.2"`（**无上界**）→ Loader 照单放行，不兼容会拖到"用到动画那一刻"才崩；1.2.6 的 Mixin 在 26.3 必崩，已换官方 **1.2.7+mc.26.3** |
+| 真机结果 | 26.2 / 26.3 **双向编译 0 真实错误**；`clienttest gui-chain` **29/29 PASS**；菜单点击 / 任务队列 / 背包键位**均已实机修复** |
+
+**新增工具**（均在 `SmartMaid/tools/`，接手直接用）：
+`diff_api.py`（量两版 API 差异）、**`compile_check.py`**（不用 Loom 直接 javac 全量编译 + 打包，含 classtweaker 自动补丁）、
+**`check_mixin_targets.py`**（Mixin 目标/注入点核验，分级 致命/警告）、`check_dep_compat.py`（第三方 jar 常量池级核验）、
+**`clienttest.py`**（客户端测试 + 错误通道驱动）、**`verify_all.py`**（静态回归总门）。
+
+**未做**：26.1 线未动（缺 jar）；Gradle 侧 `-Pmc_series=26.3` **未实跑**（26.3 产物现走 `compile_check.py --package`）；
+26.2 线未用新测试体系回归；26.3 动画**渲染观感**未肉眼比对。
 
 ### 已完成（2026-09-29：整合包兼容改造 T1–T9 + 采集/背包修正，真机验收通过 ✅）
 
@@ -503,10 +528,12 @@ tools/
 ```bash
 # JDK 25（必填，26.2 要求）
 $env:JAVA_HOME="<你的 JDK 25 安装目录>"
-gradlew.bat build        # 构建，产物 build/libs/smartmaid-0.1.0.jar
+gradlew.bat build        # 构建（默认 26.2 线），产物 build/libs/smartmaid-0.1.3.jar
 
 # 部署到游戏目录的 mods/（游戏目录用 tools/_paths.py 的解析规则，见 tools/local_paths.json）
-copy build\libs\smartmaid-0.1.0.jar "<你的 .minecraft>\mods\"
+copy build\libs\smartmaid-0.1.3.jar "<你的 .minecraft>\mods\"
+# ⚠️ 启动器开了版本隔离时 26.3 的 mods 在  "<你的 .minecraft>\versions\26.3\mods\"
+# ⚠️ 覆盖前确认游戏已完全关闭；覆盖后校验 jar 完整性（曾热覆盖致 ZipException 崩溃）
 
 # 本地模拟跳跃/解表（Node，无依赖）
 node tools/maid_jump_sim.js      # 速度/落点/朝向模拟
@@ -514,7 +541,16 @@ node tools/gen_jump_table.js     # 重新生成 MaidJumpTable.java
 
 # 代码层自动化测试（无需 GUI/RCON）
 # 写 config/smartmaid/autotest.json（JSON 指令对象数组）→ 进游戏自动执行
-# 结果在 logs/latest.log 搜 [SmartMaid-Debug] AutoTest；执行完配置自动改名 autotest.done.json
+# 结果在 logs/latest.log 搜 AutoTest（走 SmartMaid.LOGGER，**不是** [SmartMaid-Debug] 前缀）；
+#   执行完配置自动改名 autotest.done.json
+
+# 客户端自动化（GUI / 键位；文件驱动、不碰鼠标键盘；--series 用版本目录名）
+python tools/clienttest.py run gui-chain --series 26.3
+python tools/clienttest.py report --series 26.3
+python tools/clienttest.py errors --series 26.3     # 读 <game>/smartmaid/errors.jsonl
+
+# 静态回归总门（编译 + Mixin 注入点 + 第三方依赖；改完代码/升依赖后必跑）
+python tools/verify_all.py --series 26.3
 
 # 端到端联调（桌宠 + 游戏一起跑，最高效的全链路验证）
 # 1) 先用 GUI 启动一次游戏（让 HMCL 刷新 accessToken）
@@ -525,8 +561,13 @@ node tools/gen_jump_table.js     # 重新生成 MaidJumpTable.java
 
 **环境坑**：
 - Gradle wrapper 用腾讯镜像；公共依赖走阿里云/腾讯 maven；Mojang 下载需代理（本机 Clash 127.0.0.1:7890，需手动开）。
-- 反编译 26.2：`javap -p -c -classpath <loom-cache/minecraftMaven/.../minecraft-merged-*.jar> <类>`。
-- 用户游戏环境：HMCL，主玩 **26.2 Fabric**（fabric-api 0.158.0+26.2、smartmaid 都在 `.minecraft/mods/`）。
+- 反编译：**26.1 起游戏自带去混淆**，直接 `javap -p -classpath "<.minecraft>/versions/<版本>/<版本>.jar" <类>` 即可，**不需要 Loom**；
+  26.1 之前用 `javap -p -c -classpath <loom-cache/minecraftMaven/.../minecraft-merged-*.jar> <类>`。
+- 用户游戏环境：HMCL，**开了版本隔离** —— 26.2 在 `.minecraft/mods/`，**26.3 在 `.minecraft/versions/26.3/mods/`**（各自 gameDir）。
+  实机已装：26.2（Loader 0.19.3 / fabric-api 0.158.0+26.2）、26.3（Loader 0.19.5 / fabric-api 0.161.0+26.3；输入后端已是 **SDL，无 GLFW**）。
+- **PAL 按版本取**：`libs/player_animation_library-1.2.6.jar`（26.2 线）与 `libs/mc26.3/…-1.2.7.jar`（26.3 线）。
+  两者**内嵌 mocha 包名不同**（`team.unnamed.mocha` → `org.redlance.mocha`），差异走 `compat/MaidAnimCompat`。
+  两个 jar 都**已 jar-in-jar 内嵌进产物**，游戏 mods 里**不要再单独放 PAL**（同 id 会加载失败）。
 - HMCL accessToken 过期：必须在 GUI 里用 `我是启动器.exe` 启动一次，让 HMCL 自动刷新 `hmcl.json`；之后 `--launch <version>` 才带有效凭证。CLI 无法自行刷新。
 - `run_e2e_test.py` 启动游戏用 `subprocess.Popen`（`DETACHED_PROCESS` + `CREATE_NEW_PROCESS_GROUP`）独立进程组，避免被 bash 回收，**必须在同一前台 Python 调用里跑完**，不要拆成多个 bash 调用。
 

@@ -63,7 +63,7 @@ public abstract class MaidSubScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean focused) {
-        if (event.button() == 0 && inside(event.x(), event.y(), backX, backY, BACK_W, BACK_H)) {
+        if (com.oyxdsg.smartmaid.compat.MaidCompat.isPrimaryMouseButton(event.button()) && inside(event.x(), event.y(), backX, backY, BACK_W, BACK_H)) {
             goBack();
             return true;
         }
@@ -94,5 +94,15 @@ public abstract class MaidSubScreen extends Screen {
 
     protected static boolean inside(double mx, double my, int x, int y, int w, int h) {
         return mx >= x && mx < x + w && my >= y && my < y + h;
+    }
+
+    /**
+     * **测试注入口**：右上/左上「返回」按钮的矩形 {@code {x,y,w,h}}。
+     *
+     * <p>给客户端自动化测试合成点击用（{@code screen.mouseClicked(...)}，不经真实输入设备）。
+     * 生产路径不调用它。</p>
+     */
+    public int[] backRectForTest() {
+        return new int[]{backX, backY, BACK_W, BACK_H};
     }
 }

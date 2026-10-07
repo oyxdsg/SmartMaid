@@ -10,25 +10,61 @@ base {
     archivesName = project.archives_base_name
 }
 
+// ============================================================
+// 多版本兼容：版本专属源码目录
+//   src/main/java        共享代码（**不得**出现版本敏感的 API）
+//   src/mc<series>/java  版本专属实现（差异隔离层 com.oyxdsg.smartmaid.compat.MaidCompat 等）
+//
+// 切换目标版本（不改文件、只改参数）：
+//   ./gradlew build -Pmc_series=26.3 -Pminecraft_version=26.3 \
+//       -Ploader_version=0.19.5 -Ploom_version=1.18-SNAPSHOT -Pfabric_api_version=0.161.0+26.3
+// 详见 SmartMaid/DESIGN_MULTIVERSION.md
+// ============================================================
+def mcSeries = (project.findProperty('mc_series') ?: '26.2').toString()
+def mcRange = (project.findProperty('minecraft_range') ?: "~${mcSeries}").toString()
+def fapiRange = (project.findProperty('fabric_api_range')
+        ?: ">=${project.fabric_api_version}").toString()
+
+// ---- 本地依赖（Player Animation Library + 其表达式引擎）按目标版本选择 ----
+// 为什么必须分版本：PAL 1.2.7 把内嵌表达式引擎的包名从 team.unnamed.mocha
+// 换成了 org.redlance.mocha.runtime（见 src/mc*/java/.../compat/MaidAnimCompat.java）。
+// 目录约定：libs/ 放共用 + 26.2 线；libs/mc<series>/ 放该版本专属。
+def palVersions = ['26.1': '1.2.6', '26.2': '1.2.6', '26.3': '1.2.7']
+def palVersion = (project.findProperty('pal_version') ?: palVersions[mcSeries] ?: '1.2.6').toString()
+def palRange = (project.findProperty('pal_range') ?: ">=${palVersion}").toString()
+def mochaDeps = (mcSeries == '26.3')
+        ? ['mocha-runtime:mocha-runtime:6.0.1',
+           'mocha-parser:mocha-parser:6.0.1',
+           'mocha-lexer:mocha-lexer:6.0.1']
+        : ['mochafloats:mochafloats:5.0.0']
+
+sourceSets {
+    main {
+        java.srcDirs = ['src/main/java', "src/mc${mcSeries}/java"]
+    }
+}
+
+logger.lifecycle("SmartMaid 目标: minecraft=${project.minecraft_version} series=${mcSeries} range=${mcRange} "
+        + "PAL=${palVersion} mocha=${mochaDeps}")
+
 repositories {
     maven { url = 'https://maven.aliyun.com/repository/public' }
     maven { url = 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
-    // 本地 libs 目录（女仆动画引擎 Player Animation Library + mocha）
-    flatDir { dirs 'libs' }
+    // 本地依赖：libs/（共用 + 26.2 线）与 libs/mc<series>/（版本专属，如 PAL 1.2.7）
+    flatDir { dirs 'libs', "libs/mc${mcSeries}" }
 }
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-    // Player Animation Library：女仆动画引擎（HumanoidAnimationController 不依赖 Avatar，可直接用于女仆）
-    // 随模组打包进游戏（jar-in-jar，无需单独安装）；mocha 引擎由 PAL 内嵌提供
-    // Player Animation Library：女仆动画引擎（HumanoidAnimationController 不依赖 Avatar，可直接用于女仆）
-    // 随模组打包进游戏（jar-in-jar，无需单独安装）；mocha 引擎由 PAL 内嵌提供
-    implementation "player_animation_library:player_animation_library:1.2.6"
-    include "player_animation_library:player_animation_library:1.2.6"
-    // PAL 内嵌的 mocha 表达式引擎（MochaEngine 类，编译需要；运行时由 PAL 的 jar-in-jar 提供）
-    implementation "mochafloats:mochafloats:5.0.0"
+    // Player Animation Library：女仆动画引擎（HumanoidAnimationController 不依赖 Avatar，可直接用于女仆）。
+    // 随模组打包进游戏（jar-in-jar，无需单独安装）；表达式引擎由 PAL 内嵌提供。
+    implementation "player_animation_library:player_animation_library:${palVersion}"
+    include "player_animation_library:player_animation_library:${palVersion}"
+    // PAL 内嵌的表达式引擎（MochaEngine / MolangInterpreter 的类，仅**编译**需要；
+    // 运行时由 PAL 自己的 jar-in-jar 提供，因此只声明 implementation、不 include —— 否则 mod id 冲突）
+    mochaDeps.each { implementation it }
     // 离线单元测试（仅测试期，不打包进发布 jar）：纯服务端逻辑快速验证
     testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.10.2"
@@ -36,8 +72,18 @@ dependencies {
 
 processResources {
     inputs.property "version", project.version
+    inputs.property "minecraft_range", mcRange
+    inputs.property "fabric_api_range", fapiRange
+    inputs.property "target_mc", project.minecraft_version
+    inputs.property "pal_range", palRange
     filesMatching("fabric.mod.json") {
-        expand "version": project.version
+        // 每个版本产出的 jar 只声明它**真正支持**的那个版本范围（禁止宽范围通吃，
+        // 理由见 DESIGN_MULTIVERSION.md §4.3）
+        expand "version": project.version,
+               "minecraft_range": mcRange,
+               "fabric_api_range": fapiRange,
+               "target_mc": project.minecraft_version,
+               "pal_range": palRange
     }
     // 许可证与第三方声明随 jar 一起分发（jar 内含 GPL-3.0 表情数据与 CC BY-NC-SA 皮肤，
     // 声明必须与二进制同行；见仓库根 NOTICE.md）

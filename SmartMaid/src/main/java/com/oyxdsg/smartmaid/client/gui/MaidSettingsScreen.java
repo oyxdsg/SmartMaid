@@ -6,7 +6,6 @@ import java.util.List;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.oyxdsg.smartmaid.network.MaidSettingsPayload;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -95,13 +94,13 @@ public class MaidSettingsScreen extends MaidSubScreen {
 
     @Override
     public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean focused) {
-        if (event.button() == 0) {
+        if (com.oyxdsg.smartmaid.compat.MaidCompat.isPrimaryMouseButton(event.button())) {
             for (int i = 0; i < this.rects.size(); i++) {
                 int[] r = this.rects.get(i);
                 if (inside(event.x(), event.y(), r[0], r[1], r[2], r[3])) {
                     Row row = ROWS.get(i);
                     int next = (idx(row) + 1) % row.values().length;
-                    ClientPlayNetworking.send(new MaidSettingsPayload(row.field(), next));
+                    MaidNet.send(new MaidSettingsPayload(row.field(), next));
                     return true;
                 }
             }

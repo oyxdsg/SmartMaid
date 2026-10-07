@@ -14,6 +14,11 @@ run/
 .vscode/
 *.log
 
+# ---- 静态检查 / 编译探测的落盘输出 ----
+# tools/verify_all.py、compile_check.py 等会往里写日志与**解包出来的第三方类**
+# （fabric-api / PAL 的 class 与资源），属于本机scratch，不入库。
+/build_logs/
+
 # ---- 第三方参考源码（车万女仆 1.20.1 Forge，约 84MB）----
 # 获取方式：TouhouLittleMaid-1.20.zip 解压，或 https://github.com/TartaricAcid/TouhouLittleMaid
 /TouhouLittleMaid/

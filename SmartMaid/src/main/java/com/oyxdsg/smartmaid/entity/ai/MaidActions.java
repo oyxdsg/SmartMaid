@@ -459,12 +459,12 @@ public final class MaidActions {
             level.setBlock(pos, willDestroy, 3);
             PlayerBlockBreakEvents.AFTER.invoker()
                     .afterBlockBreak(level, actor, pos, willDestroy, blockEntity);
-            maid.swing(InteractionHand.MAIN_HAND);
+            com.oyxdsg.smartmaid.compat.MaidCompat.swing(maid, InteractionHand.MAIN_HAND);
             MaidDebug.log("breakBlock 状态变更 " + pos + " -> " + willDestroy);
             return true;
         }
 
-        maid.swing(InteractionHand.MAIN_HAND);
+        com.oyxdsg.smartmaid.compat.MaidCompat.swing(maid, InteractionHand.MAIN_HAND);
         ItemStack tool = maid.getMainHandItem();
         if (!tool.isEmpty()) {
             tool.hurtAndBreak(1, maid, EquipmentSlot.MAINHAND);
@@ -636,7 +636,7 @@ public final class MaidActions {
         if (maid.level().isClientSide() || !(maid.level() instanceof ServerLevel level)) {
             return false;
         }
-        maid.swing(InteractionHand.MAIN_HAND);
+        com.oyxdsg.smartmaid.compat.MaidCompat.swing(maid, InteractionHand.MAIN_HAND);
         boolean ok = maid.doHurtTarget(level, target);
         MaidDebug.log("attack " + target.getType().toShortString() + " -> " + ok);
         return ok;

@@ -1,0 +1,11 @@
+{
+  "name": "key-encoding",
+  "desc": "按键编码探针：验证 26.3（SDL scancode）下输入状态读得对。**需要人工配合**：出现下面提示后，按住 Shift + E 保持约 5 秒。",
+  "_howto": "python tools/clienttest.py run key-encoding  → 进游戏 → 看到聊天/日志提示后按住 Shift+E 约 5 秒",
+  "cases": [
+    { "id": "key.registration", "op": "assertKeyMapping", "expect": "key.keyboard.e" },
+    { "id": "key.env", "op": "note", "msg": "接下来 100 tick 请按住 Shift + E（左右 Shift 均可）" },
+    { "id": "key.poll", "op": "pollKeys", "ticks": 100,
+      "_why": "采样 LShift / RShift / keyInventory(isDown) 三种读法。若一个都没读到，说明键值编码仍然不对。" }
+  ]
+}
