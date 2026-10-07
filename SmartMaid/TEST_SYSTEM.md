@@ -26,7 +26,23 @@ grep "AutoTest" "<game>/logs/latest.log"
 
 # ④ 离线单测（纯逻辑，不需要游戏）
 ./gradlew test
+
+# ⑤ 出发布包（两条线各有自己的通路）
+cd SmartMaid && ./gradlew build -x test          # 26.2 线 → build/libs/smartmaid-<版本>.jar
+python tools/compile_check.py \                  # 26.3 线（Gradle 多版本构建尚未实跑）
+  --mc-jar "<游戏目录>/versions/26.3/26.3.jar" \
+  --fapi-jar ../build_logs/deps/fabric-api-26.3.jar \
+  --src src/main/java --src src/mc26.3/java \
+  --libs libs/mc26.3 --libs-dir "<游戏目录>/libraries" \
+  --include-jar libs/mc26.3/player_animation_library-1.2.7.jar \
+  --mod-version <版本> --mc-version 26.3 --mc-range "~26.3" \
+  --fapi-range ">=0.161.0+26.3" --pal-range ">=1.2.7" \
+  --package ../build_logs/out/smartmaid-<版本>-mc26.3.jar
 ```
+
+> ⚠️ **打包必查**（26.3 曾踩过）：`--include-jar` 要**只给 PAL**（三份 mocha 由 PAL 运行时提供，不能内嵌）；
+> `--fapi-range` / `--pal-range` 默认是 `*`（只适合测试包），**发布包必须显式传真实范围**；
+> 打完用 `zipfile.testzip()` 校验，并确认包内 `fabric.mod.json` 的 `version` / `minecraft` 范围 / `META-INF/jars` 都对。
 
 > ⚠️ **这个启动器开了版本隔离**：`<game>` = `<.minecraft>/versions/<版本>`。
 > 所以 `clienttest.py` / `autotest` 的路径都要带 `--series`。详见 `MEMORY.md` §2。
